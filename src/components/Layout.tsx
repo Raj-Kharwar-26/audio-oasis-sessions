@@ -5,6 +5,9 @@ import { useSession } from '@/context/SessionContext';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { getInitials } from '@/lib/utils';
+import { Link, useLocation } from 'react-router-dom';
+import { Music, Search, Users } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -13,6 +16,7 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { user, isAuthenticated, logout } = useAuth();
   const { currentSession, leaveSession } = useSession();
+  const location = useLocation();
   
   const handleLogout = () => {
     if (currentSession) {
@@ -54,6 +58,37 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       
       {/* Main content */}
       <main className="flex-1 container mx-auto p-4 md:p-6">
+        {isAuthenticated && (
+          <div className="mb-6 flex justify-center">
+            <div className="flex gap-4 p-1 bg-secondary/20 rounded-lg">
+              <Link to="/">
+                <Button 
+                  variant={location.pathname === '/' ? "default" : "ghost"} 
+                  className={cn(
+                    "gap-2",
+                    location.pathname === '/' ? "bg-primary" : ""
+                  )}
+                >
+                  <Users size={16} />
+                  Sessions
+                </Button>
+              </Link>
+              <Link to="/explore">
+                <Button
+                  variant={location.pathname === '/explore' ? "default" : "ghost"}
+                  className={cn(
+                    "gap-2",
+                    location.pathname === '/explore' ? "bg-primary" : ""
+                  )}
+                >
+                  <Search size={16} />
+                  Explore Music
+                </Button>
+              </Link>
+            </div>
+          </div>
+        )}
+        
         {children}
       </main>
       
