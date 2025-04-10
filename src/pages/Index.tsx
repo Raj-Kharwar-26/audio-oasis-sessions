@@ -1,13 +1,41 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+
+import React from 'react';
+import Layout from '@/components/Layout';
+import { useAuth } from '@/context/AuthContext';
+import { useSession } from '@/context/SessionContext';
+import AuthForm from '@/components/AuthForm';
+import SessionList from '@/components/SessionList';
+import SessionView from '@/components/SessionView';
 
 const Index = () => {
+  const { isAuthenticated, isLoading } = useAuth();
+  const { currentSession } = useSession();
+  
+  if (isLoading) {
+    return (
+      <Layout>
+        <div className="min-h-[60vh] flex items-center justify-center">
+          <div className="text-center">
+            <h2 className="text-2xl font-semibold">Loading...</h2>
+            <p className="text-muted-foreground">Please wait</p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+  
+  if (!isAuthenticated) {
+    return (
+      <Layout>
+        <AuthForm />
+      </Layout>
+    );
+  }
+  
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4">Welcome to Your Blank App</h1>
-        <p className="text-xl text-gray-600">Start building your amazing project here!</p>
-      </div>
-    </div>
+    <Layout>
+      {currentSession ? <SessionView /> : <SessionList />}
+    </Layout>
   );
 };
 
