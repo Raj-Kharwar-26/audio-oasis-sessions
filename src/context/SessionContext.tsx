@@ -1,7 +1,9 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Session, Song, Message, User, PlayerState, SongSuggestion } from '@/types';
 import { useAuth } from './AuthContext';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 // Mock data for the demo
 import { mockSessions, mockSongs } from '@/lib/mockData';

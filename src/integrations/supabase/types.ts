@@ -9,7 +9,95 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      search_history: {
+        Row: {
+          created_at: string | null
+          id: string
+          query: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          query: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          query?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      song_votes: {
+        Row: {
+          created_at: string | null
+          id: string
+          song_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          song_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          song_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "song_votes_song_id_fkey"
+            columns: ["song_id"]
+            isOneToOne: false
+            referencedRelation: "songs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      songs: {
+        Row: {
+          added_by: string | null
+          album: string | null
+          artist: string
+          cover: string | null
+          created_at: string | null
+          duration: number
+          id: string
+          title: string
+          updated_at: string | null
+          url: string
+        }
+        Insert: {
+          added_by?: string | null
+          album?: string | null
+          artist: string
+          cover?: string | null
+          created_at?: string | null
+          duration: number
+          id?: string
+          title: string
+          updated_at?: string | null
+          url: string
+        }
+        Update: {
+          added_by?: string | null
+          album?: string | null
+          artist?: string
+          cover?: string | null
+          created_at?: string | null
+          duration?: number
+          id?: string
+          title?: string
+          updated_at?: string | null
+          url?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

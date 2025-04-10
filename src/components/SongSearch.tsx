@@ -9,113 +9,7 @@ import { useAuth } from '@/context/AuthContext';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { formatTime } from '@/lib/utils';
 import { toast } from 'sonner';
-
-// Mock API for song search - in a real app, this would be an API call
-const searchSongs = async (query: string): Promise<Song[]> => {
-  // We'll simulate a network request with a timeout
-  await new Promise(resolve => setTimeout(resolve, 800));
-  
-  // This is the mock data - in a real app, this would be from an API
-  const allSongs = [
-    {
-      id: "song_1",
-      title: "Blinding Lights",
-      artist: "The Weeknd",
-      album: "After Hours",
-      cover: "https://i.scdn.co/image/ab67616d0000b273a594547e5f5927d0507051e0",
-      duration: 201,
-      url: "https://p.scdn.co/mp3-preview/9696cfad3e4114a6e25967d63bc4a2c3d0206260?cid=774b29d4f13844c495f206cafdad9c86",
-      addedBy: "system",
-      votes: []
-    },
-    {
-      id: "song_2",
-      title: "Shape of You",
-      artist: "Ed Sheeran",
-      album: "÷ (Divide)",
-      cover: "https://i.scdn.co/image/ab67616d0000b273ba5db46f4b838ef6027e6f96",
-      duration: 234,
-      url: "https://p.scdn.co/mp3-preview/84462d8e1e4d0f9e5ccd06f0da390f65843774a2?cid=774b29d4f13844c495f206cafdad9c86",
-      addedBy: "system",
-      votes: []
-    },
-    {
-      id: "song_3",
-      title: "Dance Monkey",
-      artist: "Tones And I",
-      album: "The Kids Are Coming",
-      cover: "https://i.scdn.co/image/ab67616d0000b27360be9dde82c8b8ca62efe930",
-      duration: 210,
-      url: "https://p.scdn.co/mp3-preview/7a910d90859e4d2fa3b13afdf0a77669f0f5faaa?cid=774b29d4f13844c495f206cafdad9c86",
-      addedBy: "system",
-      votes: []
-    },
-    {
-      id: "song_4",
-      title: "Uptown Funk",
-      artist: "Mark Ronson ft. Bruno Mars",
-      album: "Uptown Special",
-      cover: "https://i.scdn.co/image/ab67616d0000b273e419ccba0baa7bd5962dc082",
-      duration: 270,
-      url: "https://p.scdn.co/mp3-preview/32e9b52e35d9575e54738bb5a06facf54c4853ca?cid=774b29d4f13844c495f206cafdad9c86",
-      addedBy: "system",
-      votes: []
-    },
-    {
-      id: "song_5",
-      title: "Levitating",
-      artist: "Dua Lipa",
-      album: "Future Nostalgia",
-      cover: "https://i.scdn.co/image/ab67616d0000b2734e0362c225863f6ae922b836",
-      duration: 203,
-      url: "https://p.scdn.co/mp3-preview/fedbedb9fecac4762c8c1cddad58fc19f490d597?cid=774b29d4f13844c495f206cafdad9c86",
-      addedBy: "system",
-      votes: []
-    },
-    {
-      id: "song_6",
-      title: "Heat Waves",
-      artist: "Glass Animals",
-      album: "Dreamland",
-      cover: "https://i.scdn.co/image/ab67616d0000b2739e495fb707973f3390850eea",
-      duration: 238,
-      url: "https://p.scdn.co/mp3-preview/1126b5d7829da5b3c39b0017d2460aaaafae3219?cid=774b29d4f13844c495f206cafdad9c86",
-      addedBy: "system",
-      votes: []
-    },
-    {
-      id: "song_7",
-      title: "Bad Guy",
-      artist: "Billie Eilish",
-      album: "WHEN WE ALL FALL ASLEEP, WHERE DO WE GO?",
-      cover: "https://i.scdn.co/image/ab67616d0000b27382b243023b937fd579a35533",
-      duration: 194,
-      url: "https://p.scdn.co/mp3-preview/4ad596e5f5229066901c11d7f5947d8d5d246b44?cid=774b29d4f13844c495f206cafdad9c86",
-      addedBy: "system",
-      votes: []
-    },
-    {
-      id: "song_8",
-      title: "Someone You Loved",
-      artist: "Lewis Capaldi",
-      album: "Divinely Uninspired To A Hellish Extent",
-      cover: "https://i.scdn.co/image/ab67616d0000b2739460e08032fe37c1149f88fd",
-      duration: 182,
-      url: "https://p.scdn.co/mp3-preview/aee99b40fa3f7da01d9a26fbb92904befcb31d85?cid=774b29d4f13844c495f206cafdad9c86",
-      addedBy: "system",
-      votes: []
-    }
-  ];
-  
-  if (!query) return [];
-  
-  // Filter songs based on query (title, artist, album)
-  return allSongs.filter(song => 
-    song.title.toLowerCase().includes(query.toLowerCase()) || 
-    song.artist.toLowerCase().includes(query.toLowerCase()) ||
-    (song.album && song.album.toLowerCase().includes(query.toLowerCase()))
-  );
-};
+import { searchSongs } from '@/services/spotify';
 
 const SongSearch: React.FC = () => {
   const [query, setQuery] = useState('');
@@ -123,7 +17,7 @@ const SongSearch: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [currentPlayingSong, setCurrentPlayingSong] = useState<Song | null>(null);
   const [audio] = useState(new Audio());
-  const { currentSession, addSongToSession } = useSession();
+  const { currentSession, addSong } = useSession();
   const { user } = useAuth();
   
   const handleSearch = async (e: React.FormEvent) => {
@@ -176,7 +70,7 @@ const SongSearch: React.FC = () => {
       return;
     }
     
-    addSongToSession({
+    addSong({
       title: song.title,
       artist: song.artist,
       album: song.album,
