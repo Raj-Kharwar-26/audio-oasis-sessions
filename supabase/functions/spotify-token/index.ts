@@ -4,12 +4,26 @@ import { serve } from "https://deno.land/std@0.182.0/http/server.ts";
 const SPOTIFY_CLIENT_ID = Deno.env.get("SPOTIFY_CLIENT_ID") || "";
 const SPOTIFY_CLIENT_SECRET = Deno.env.get("SPOTIFY_CLIENT_SECRET") || "";
 
+// CORS headers
+const corsHeaders = {
+  "Content-Type": "application/json",
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
 serve(async (req) => {
+  // Handle preflight requests
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+  
   // Basic validation of required env variables
   if (!SPOTIFY_CLIENT_ID || !SPOTIFY_CLIENT_SECRET) {
+    console.error("Spotify credentials not configured");
     return new Response(
       JSON.stringify({ error: "Spotify credentials not configured" }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+      { status: 500, headers: corsHeaders }
     );
   }
 
@@ -32,20 +46,22 @@ serve(async (req) => {
     const data = await response.json();
 
     if (!response.ok) {
+      console.error("Failed to get Spotify token:", data);
       return new Response(
         JSON.stringify({ error: "Failed to get Spotify token", details: data }),
-        { status: response.status, headers: { "Content-Type": "application/json" } }
+        { status: response.status, headers: corsHeaders }
       );
     }
 
     return new Response(
       JSON.stringify(data),
-      { headers: { "Content-Type": "application/json" } }
+      { headers: corsHeaders }
     );
   } catch (error) {
+    console.error("Server error:", error.message);
     return new Response(
       JSON.stringify({ error: "Server error", details: error.message }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+      { status: 500, headers: corsHeaders }
     );
   }
 });

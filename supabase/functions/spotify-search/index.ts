@@ -7,34 +7,35 @@ const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
 const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-serve(async (req) => {
-  // CORS headers
-  const headers = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
-  };
+// CORS headers
+const corsHeaders = {
+  "Content-Type": "application/json",
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
 
+serve(async (req) => {
   // Handle preflight requests
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers });
+    return new Response(null, { headers: corsHeaders });
   }
 
   if (req.method !== "POST") {
     return new Response(
       JSON.stringify({ error: "Method not allowed" }),
-      { status: 405, headers }
+      { status: 405, headers: corsHeaders }
     );
   }
 
   try {
-    const { query, userId } = await req.json();
+    const requestBody = await req.json();
+    const { query, userId } = requestBody;
 
     if (!query) {
       return new Response(
         JSON.stringify({ error: "Query parameter is required" }),
-        { status: 400, headers }
+        { status: 400, headers: corsHeaders }
       );
     }
 
@@ -49,9 +50,10 @@ serve(async (req) => {
     const tokenData = await tokenResponse.json();
     
     if (!tokenResponse.ok || !tokenData.access_token) {
+      console.error("Failed to get Spotify token:", tokenData);
       return new Response(
         JSON.stringify({ error: "Failed to get Spotify token", details: tokenData }),
-        { status: tokenResponse.status, headers }
+        { status: tokenResponse.status, headers: corsHeaders }
       );
     }
 
@@ -76,34 +78,38 @@ serve(async (req) => {
     const spotifyData = await spotifyResponse.json();
 
     if (!spotifyResponse.ok) {
+      console.error("Spotify search failed:", spotifyData);
       return new Response(
         JSON.stringify({ error: "Spotify search failed", details: spotifyData }),
-        { status: spotifyResponse.status, headers }
+        { status: spotifyResponse.status, headers: corsHeaders }
       );
     }
 
     // Transform Spotify data to our format
-    const tracks = spotifyData.tracks?.items.map(track => ({
-      id: track.id,
-      title: track.name,
-      artist: track.artists.map(a => a.name).join(", "),
-      album: track.album.name,
-      cover: track.album.images[0]?.url,
-      duration: Math.round(track.duration_ms / 1000),
-      url: track.preview_url,
-      addedBy: "system",
-      votes: []
-    })).filter(track => track.url);
+    const tracks = spotifyData.tracks?.items
+      .map(track => ({
+        id: track.id,
+        title: track.name,
+        artist: track.artists.map(a => a.name).join(", "),
+        album: track.album.name,
+        cover: track.album.images[0]?.url,
+        duration: Math.round(track.duration_ms / 1000),
+        url: track.preview_url,
+        addedBy: "system",
+        votes: []
+      }))
+      .filter(track => track.url);
 
     return new Response(
       JSON.stringify({ tracks }),
-      { headers }
+      { headers: corsHeaders }
     );
 
   } catch (error) {
+    console.error("Server error:", error);
     return new Response(
       JSON.stringify({ error: "Server error", details: error.message }),
-      { status: 500, headers }
+      { status: 500, headers: corsHeaders }
     );
   }
 });
