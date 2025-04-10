@@ -12,7 +12,7 @@ const corsHeaders = {
   "Content-Type": "application/json",
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, apikey, x-client-info",
 };
 
 serve(async (req) => {
@@ -39,11 +39,13 @@ serve(async (req) => {
       );
     }
 
+    console.log("Getting Spotify token...");
     // Get Spotify token
     const tokenResponse = await fetch(`${supabaseUrl}/functions/v1/spotify-token`, {
       method: "GET",
       headers: {
         "Authorization": `Bearer ${supabaseKey}`,
+        "Content-Type": "application/json",
       },
     });
     
@@ -56,6 +58,8 @@ serve(async (req) => {
         { status: tokenResponse.status, headers: corsHeaders }
       );
     }
+
+    console.log("Token retrieved successfully, searching Spotify...");
 
     // Save search query to history if userId is provided
     if (userId) {
@@ -85,6 +89,8 @@ serve(async (req) => {
       );
     }
 
+    console.log(`Found ${spotifyData.tracks?.items?.length || 0} tracks`);
+
     // Transform Spotify data to our format
     const tracks = spotifyData.tracks?.items
       .map(track => ({
@@ -94,11 +100,11 @@ serve(async (req) => {
         album: track.album.name,
         cover: track.album.images[0]?.url,
         duration: Math.round(track.duration_ms / 1000),
-        url: track.preview_url,
-        addedBy: "system",
+        url: track.preview_url, // This can be null for some tracks
+        addedBy: userId || "system",
         votes: []
       }))
-      .filter(track => track.url);
+      .filter(track => track !== null);
 
     return new Response(
       JSON.stringify({ tracks }),

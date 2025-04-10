@@ -1,8 +1,8 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Play, Pause, Plus } from 'lucide-react';
+import { Search, Play, Pause, Plus, AlertCircle } from 'lucide-react';
 import { Song } from '@/types';
 import { useSession } from '@/context/SessionContext';
 import { useAuth } from '@/context/AuthContext';
@@ -17,8 +17,42 @@ const SongSearch: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [currentPlayingSong, setCurrentPlayingSong] = useState<Song | null>(null);
   const [audio] = useState(new Audio());
+  const [audioPlaying, setAudioPlaying] = useState(false);
   const { currentSession, addSong } = useSession();
   const { user } = useAuth();
+  
+  // Clean up audio when component unmounts
+  useEffect(() => {
+    return () => {
+      if (audio) {
+        audio.pause();
+        audio.src = '';
+      }
+    };
+  }, [audio]);
+  
+  // Add event listeners to audio element
+  useEffect(() => {
+    const handleEnded = () => {
+      setCurrentPlayingSong(null);
+      setAudioPlaying(false);
+    };
+    
+    const handleError = (e: ErrorEvent) => {
+      console.error("Audio playback error:", e);
+      toast.error("Couldn't play this song preview");
+      setCurrentPlayingSong(null);
+      setAudioPlaying(false);
+    };
+    
+    audio.addEventListener('ended', handleEnded);
+    audio.addEventListener('error', handleError as EventListener);
+    
+    return () => {
+      audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener('error', handleError as EventListener);
+    };
+  }, [audio]);
   
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,6 +62,10 @@ const SongSearch: React.FC = () => {
     try {
       const songs = await searchSongs(query);
       setResults(songs);
+      
+      if (songs.length === 0) {
+        toast.info(`No results found for "${query}"`);
+      }
     } catch (error) {
       console.error("Error searching songs:", error);
       toast.error("Failed to search songs. Please try again.");
@@ -37,16 +75,25 @@ const SongSearch: React.FC = () => {
   };
   
   const handlePlayPause = (song: Song) => {
+    if (!song.url) {
+      toast.error("No preview available for this song");
+      return;
+    }
+    
     if (currentPlayingSong && currentPlayingSong.id === song.id) {
       // Already playing this song, so pause/resume
       if (audio.paused) {
-        audio.play();
+        audio.play()
+          .then(() => setAudioPlaying(true))
+          .catch(err => {
+            console.error("Error playing audio:", err);
+            toast.error("Failed to play song preview");
+            setAudioPlaying(false);
+          });
       } else {
         audio.pause();
+        setAudioPlaying(false);
       }
-      
-      // Update UI state
-      setCurrentPlayingSong({...currentPlayingSong});
     } else {
       // Play a new song
       if (currentPlayingSong) {
@@ -54,13 +101,16 @@ const SongSearch: React.FC = () => {
       }
       
       audio.src = song.url;
-      audio.play();
-      setCurrentPlayingSong(song);
-      
-      // Add event listener for when song ends
-      audio.onended = () => {
-        setCurrentPlayingSong(null);
-      };
+      audio.play()
+        .then(() => {
+          setCurrentPlayingSong(song);
+          setAudioPlaying(true);
+        })
+        .catch(err => {
+          console.error("Error playing audio:", err);
+          toast.error("Failed to play song preview");
+          setAudioPlaying(false);
+        });
     }
   };
   
@@ -130,11 +180,19 @@ const SongSearch: React.FC = () => {
                     size="icon"
                     className="h-8 w-8"
                     onClick={() => handlePlayPause(song)}
+                    disabled={!song.url}
+                    title={song.url ? "Play preview" : "No preview available"}
                   >
-                    {currentPlayingSong && currentPlayingSong.id === song.id && !audio.paused ? (
+                    {currentPlayingSong && currentPlayingSong.id === song.id && audioPlaying ? (
                       <Pause size={16} />
                     ) : (
-                      <Play size={16} />
+                      <>
+                        {song.url ? (
+                          <Play size={16} />
+                        ) : (
+                          <AlertCircle size={16} className="text-muted-foreground" />
+                        )}
+                      </>
                     )}
                   </Button>
                   
