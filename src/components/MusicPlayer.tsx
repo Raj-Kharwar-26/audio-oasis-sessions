@@ -4,7 +4,7 @@ import { useSession } from '@/context/SessionContext';
 import { useAuth } from '@/context/AuthContext';
 import { 
   Play, Pause, SkipBack, SkipForward, 
-  Music, Volume2, Users
+  Music, Volume2, Users, Youtube, Music2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
@@ -12,7 +12,7 @@ import { PlayerState } from '@/types';
 import { formatTime } from '@/lib/utils';
 
 const MusicPlayer: React.FC = () => {
-  const { currentSession, playerState, playPause, nextSong, previousSong, seekTo } = useSession();
+  const { currentSession, playerState, playPause, nextSong, previousSong, seekTo, isUsingYouTube } = useSession();
   const { user } = useAuth();
   
   if (!currentSession || !currentSession.playlist.length) {
@@ -43,6 +43,15 @@ const MusicPlayer: React.FC = () => {
             </div>
           )}
           
+          {/* Audio source indicator */}
+          <div className="absolute top-2 right-2 bg-black bg-opacity-60 rounded-full p-1.5">
+            {isUsingYouTube ? (
+              <Youtube size={16} className="text-red-500" />
+            ) : (
+              <Music2 size={16} className="text-green-500" />
+            )}
+          </div>
+          
           {/* Audio visualizer */}
           {playerState === PlayerState.PLAYING && (
             <div className="absolute bottom-2 left-2 right-2 audio-visualizer h-4">
@@ -65,6 +74,9 @@ const MusicPlayer: React.FC = () => {
               <p className="text-sm text-muted-foreground truncate max-w-[200px] md:max-w-xs">
                 {currentSong.artist}
               </p>
+              <div className="text-xs text-muted-foreground mt-1">
+                {isUsingYouTube ? 'Full song via YouTube' : 'Preview via Spotify'}
+              </div>
             </div>
             
             <div className="flex items-center gap-2">

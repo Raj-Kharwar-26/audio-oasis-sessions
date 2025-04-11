@@ -2,14 +2,14 @@
 import React, { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Play, Pause, Plus, AlertCircle } from 'lucide-react';
+import { Search, Play, Pause, Plus, AlertCircle, Youtube } from 'lucide-react';
 import { Song } from '@/types';
 import { useSession } from '@/context/SessionContext';
 import { useAuth } from '@/context/AuthContext';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { formatTime } from '@/lib/utils';
 import { toast } from 'sonner';
-import { searchSongs } from '@/services/spotify';
+import { searchSongs, getYouTubeVideoId } from '@/services/spotify';
 
 const SongSearch: React.FC = () => {
   const [query, setQuery] = useState('');
@@ -116,10 +116,22 @@ const SongSearch: React.FC = () => {
     }
   };
   
-  const handleAddToSession = (song: Song) => {
+  const handleAddToSession = async (song: Song) => {
     if (!currentSession || !user) {
       toast.error("You need to join a session first to add songs");
       return;
+    }
+    
+    // Try to get YouTube video ID for full playback
+    try {
+      const videoId = await getYouTubeVideoId(song.title, song.artist);
+      if (videoId) {
+        console.log(`Found YouTube video ID for ${song.title}: ${videoId}`);
+        song.youtubeId = videoId;
+      }
+    } catch (error) {
+      console.error("Error getting YouTube video ID:", error);
+      // Continue without YouTube ID - will use Spotify preview instead
     }
     
     addSong({
@@ -128,7 +140,8 @@ const SongSearch: React.FC = () => {
       album: song.album,
       cover: song.cover,
       duration: song.duration,
-      url: song.url
+      url: song.url,
+      youtubeId: song.youtubeId
     });
     
     toast.success(`Added "${song.title}" to the session playlist`);
@@ -202,10 +215,13 @@ const SongSearch: React.FC = () => {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8"
+                      className="h-8 w-8 group relative"
                       onClick={() => handleAddToSession(song)}
-                      title="Add to session playlist"
+                      title="Add to session playlist (with full playback via YouTube)"
                     >
+                      <div className="absolute -top-2 -right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Youtube size={10} className="text-red-500" />
+                      </div>
                       <Plus size={16} />
                     </Button>
                   )}

@@ -1,1 +1,21 @@
+
 project_id = "akcorcehvpmmaobbkfet"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "storage", "graphql_public"]
+
+[db]
+port = 54322
+
+[studio]
+port = 54323
+
+[functions]
+[functions.spotify-search]
+verify_jwt = false
+[functions.spotify-token]
+verify_jwt = false
+[functions.youtube-search]
+verify_jwt = false

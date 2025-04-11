@@ -1,12 +1,21 @@
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { Session, Song, Message, User, PlayerState, SongSuggestion } from '@/types';
 import { useAuth } from './AuthContext';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { getYouTubeVideoId, saveSession, getSession, getUserSessions, deleteSession } from '@/services/spotify';
 
 // Mock data for the demo
-import { mockSessions, mockSongs } from '@/lib/mockData';
+import { mockSongs } from '@/lib/mockData';
+
+// Define YouTube player interface
+declare global {
+  interface Window {
+    YT: any;
+    onYouTubeIframeAPIReady: () => void;
+  }
+}
 
 interface SessionContextType {
   currentSession: Session | null;
@@ -25,21 +34,127 @@ interface SessionContextType {
   previousSong: () => void;
   seekTo: (progress: number) => void;
   getSuggestions: () => SongSuggestion[];
+  isUsingYouTube: boolean;
 }
 
 const SessionContext = createContext<SessionContextType | undefined>(undefined);
 
 export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
-  const [sessions, setSessions] = useState<Session[]>(mockSessions);
+  const [sessions, setSessions] = useState<Session[]>([]);
   const [currentSession, setCurrentSession] = useState<Session | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [playerState, setPlayerState] = useState<PlayerState>(PlayerState.PAUSED);
+  const [isUsingYouTube, setIsUsingYouTube] = useState<boolean>(false);
+  const [youtubeApiLoaded, setYoutubeApiLoaded] = useState<boolean>(false);
+  const youtubePlayer = useRef<any>(null);
+  const currentVideoId = useRef<string | null>(null);
 
+  // Load sessions from storage on mount
+  useEffect(() => {
+    if (user) {
+      const userSessions = getUserSessions();
+      if (userSessions.length > 0) {
+        setSessions(userSessions);
+      }
+    }
+  }, [user]);
+
+  // Load YouTube IFrame API
+  useEffect(() => {
+    if (!youtubeApiLoaded) {
+      const tag = document.createElement('script');
+      tag.src = 'https://www.youtube.com/iframe_api';
+      const firstScriptTag = document.getElementsByTagName('script')[0];
+      firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
+
+      window.onYouTubeIframeAPIReady = () => {
+        setYoutubeApiLoaded(true);
+        console.log('YouTube IFrame API ready');
+      };
+    }
+  }, [youtubeApiLoaded]);
+
+  // Initialize YouTube player when API is loaded
+  useEffect(() => {
+    if (youtubeApiLoaded && !youtubePlayer.current && document.getElementById('youtube-player')) {
+      youtubePlayer.current = new window.YT.Player('youtube-player', {
+        height: '0',
+        width: '0',
+        playerVars: {
+          autoplay: 0,
+          controls: 0,
+          disablekb: 1,
+          fs: 0,
+          modestbranding: 1,
+          rel: 0
+        },
+        events: {
+          onReady: (event: any) => {
+            console.log('YouTube player ready');
+          },
+          onStateChange: (event: any) => {
+            if (event.data === window.YT.PlayerState.ENDED) {
+              // Auto-proceed to next song
+              nextSong();
+            } else if (event.data === window.YT.PlayerState.PLAYING) {
+              setPlayerState(PlayerState.PLAYING);
+            } else if (event.data === window.YT.PlayerState.PAUSED) {
+              setPlayerState(PlayerState.PAUSED);
+            }
+          },
+          onError: (event: any) => {
+            console.error('YouTube player error:', event.data);
+            toast.error('Failed to play the song. Trying next song...');
+            setIsUsingYouTube(false);
+            nextSong();
+          }
+        }
+      });
+    }
+  }, [youtubeApiLoaded]);
+
+  // Handle YouTube playback when session or song changes
+  useEffect(() => {
+    const loadYouTubeVideo = async () => {
+      if (!currentSession || !youtubeApiLoaded || !youtubePlayer.current) return;
+      
+      const currentSong = currentSession.playlist[currentSession.currentSongIndex];
+      if (!currentSong) return;
+      
+      try {
+        const videoId = await getYouTubeVideoId(currentSong.title, currentSong.artist);
+        
+        if (videoId) {
+          currentVideoId.current = videoId;
+          youtubePlayer.current.loadVideoById(videoId);
+          
+          if (currentSession.isPlaying) {
+            youtubePlayer.current.playVideo();
+          } else {
+            youtubePlayer.current.pauseVideo();
+          }
+          
+          setIsUsingYouTube(true);
+        } else {
+          setIsUsingYouTube(false);
+        }
+      } catch (error) {
+        console.error('Error loading YouTube video:', error);
+        setIsUsingYouTube(false);
+      }
+    };
+    
+    if (currentSession?.isPlaying && youtubeApiLoaded) {
+      loadYouTubeVideo();
+    }
+  }, [currentSession?.currentSongIndex, currentSession?.isPlaying, youtubeApiLoaded]);
+
+  // Original timer for non-YouTube playback
   useEffect(() => {
     let interval: NodeJS.Timeout;
     
-    if (currentSession && currentSession.isPlaying && playerState === PlayerState.PLAYING) {
+    if (currentSession && currentSession.isPlaying && playerState === PlayerState.PLAYING && !isUsingYouTube) {
       interval = setInterval(() => {
         setCurrentSession(prev => {
           if (!prev) return prev;
@@ -67,7 +182,33 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
     
     return () => clearInterval(interval);
-  }, [currentSession, playerState]);
+  }, [currentSession, playerState, isUsingYouTube]);
+
+  // Check for session ID in URL when component mounts
+  useEffect(() => {
+    const checkSessionInUrl = async () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const sessionId = urlParams.get('session');
+      
+      if (sessionId) {
+        // Get the session from storage
+        const session = await getSession(sessionId);
+        
+        if (session) {
+          // Join the session
+          joinSession(sessionId);
+        } else {
+          toast.error('Session not found or has ended');
+        }
+        
+        // Clear the URL parameter
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, '', newUrl);
+      }
+    };
+    
+    checkSessionInUrl();
+  }, []);
 
   const createSession = (name: string) => {
     if (!user) {
@@ -85,7 +226,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       name: name.trim(),
       hostId: user.id,
       users: [user],
-      playlist: [mockSongs[0], mockSongs[1]],
+      playlist: [],
       currentSongIndex: 0,
       isPlaying: false,
       progress: 0,
@@ -104,18 +245,34 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
     setMessages([welcomeMsg]);
     
+    // Save session to storage
+    saveSession(newSession);
+    
     toast.success(`Session "${name}" created!`);
   };
 
-  const joinSession = (sessionId: string) => {
+  const joinSession = async (sessionId: string) => {
     if (!user) {
       toast.error('You must be logged in to join a session');
       return;
     }
     
-    const session = sessions.find(s => s.id === sessionId);
+    // First check user sessions
+    let userSessions = getUserSessions();
+    let session = userSessions.find(s => s.id === sessionId);
+    
+    // Then check all sessions
     if (!session) {
-      toast.error('Session not found');
+      session = sessions.find(s => s.id === sessionId);
+    }
+    
+    // If still not found, try to get from storage
+    if (!session) {
+      session = await getSession(sessionId);
+    }
+    
+    if (!session) {
+      toast.error('Session not found or has ended');
       return;
     }
     
@@ -129,6 +286,9 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         prev.map(s => s.id === sessionId ? updatedSession : s)
       );
       
+      // Update session in storage
+      saveSession(updatedSession);
+      
       const joinMsg: Message = {
         id: `msg_${Date.now()}`,
         userId: 'system',
@@ -137,6 +297,8 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         timestamp: Date.now(),
       };
       setMessages(prev => [...prev, joinMsg]);
+      
+      session = updatedSession;
     }
     
     setCurrentSession(session);
@@ -153,6 +315,9 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setSessions(prev => 
         prev.filter(s => s.id !== currentSession.id)
       );
+      
+      // Remove session from storage
+      deleteSession(currentSession.id);
     } else {
       const updatedSession = {
         ...currentSession,
@@ -162,6 +327,9 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setSessions(prev => 
         prev.map(s => s.id === currentSession.id ? updatedSession : s)
       );
+      
+      // Update session in storage
+      saveSession(updatedSession);
       
       const leaveMsg: Message = {
         id: `msg_${Date.now()}`,
@@ -173,9 +341,15 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setMessages(prev => [...prev, leaveMsg]);
     }
     
+    // Stop YouTube player if active
+    if (isUsingYouTube && youtubePlayer.current) {
+      youtubePlayer.current.stopVideo();
+    }
+    
     setCurrentSession(null);
     setPlayerState(PlayerState.PAUSED);
     setMessages([]);
+    setIsUsingYouTube(false);
   };
 
   const sendMessage = (text: string) => {
@@ -211,6 +385,9 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setSessions(prev => 
       prev.map(s => s.id === currentSession.id ? updatedSession : s)
     );
+    
+    // Update session in storage
+    saveSession(updatedSession);
     
     const songMsg: Message = {
       id: `msg_${Date.now()}`,
@@ -267,6 +444,9 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setSessions(prev => 
       prev.map(s => s.id === currentSession.id ? updatedSession : s)
     );
+    
+    // Update session in storage
+    saveSession(updatedSession);
   };
 
   const removeSong = (songId: string) => {
@@ -287,6 +467,12 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       updatedIndex--;
     } else if (removedIndex === currentSession.currentSongIndex) {
       updatedIndex = Math.min(updatedIndex, updatedPlaylist.length - 1);
+      
+      // If using YouTube, stop the current video
+      if (isUsingYouTube && youtubePlayer.current) {
+        youtubePlayer.current.stopVideo();
+        setIsUsingYouTube(false);
+      }
     }
     
     const updatedSession = {
@@ -300,6 +486,9 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setSessions(prev => 
       prev.map(s => s.id === currentSession.id ? updatedSession : s)
     );
+    
+    // Update session in storage
+    saveSession(updatedSession);
     
     toast.success(`Removed "${song.title}" from playlist`);
   };
@@ -321,6 +510,18 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setSessions(prev => 
       prev.map(s => s.id === currentSession.id ? updatedSession : s)
     );
+    
+    // Update session in storage
+    saveSession(updatedSession);
+    
+    // Control YouTube playback if active
+    if (isUsingYouTube && youtubePlayer.current) {
+      if (updatedSession.isPlaying) {
+        youtubePlayer.current.playVideo();
+      } else {
+        youtubePlayer.current.pauseVideo();
+      }
+    }
     
     setPlayerState(updatedSession.isPlaying ? PlayerState.PLAYING : PlayerState.PAUSED);
   };
@@ -349,6 +550,12 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setSessions(prev => 
       prev.map(s => s.id === currentSession.id ? updatedSession : s)
     );
+    
+    // Update session in storage
+    saveSession(updatedSession);
+    
+    // Reset YouTube playback
+    setIsUsingYouTube(false);
   };
 
   const previousSong = () => {
@@ -373,6 +580,15 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setSessions(prev => 
         prev.map(s => s.id === currentSession.id ? updatedSession : s)
       );
+      
+      // Update session in storage
+      saveSession(updatedSession);
+      
+      // Reset YouTube playback if active
+      if (isUsingYouTube && youtubePlayer.current) {
+        youtubePlayer.current.seekTo(0, true);
+      }
+      
       return;
     }
     
@@ -388,6 +604,12 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setSessions(prev => 
       prev.map(s => s.id === currentSession.id ? updatedSession : s)
     );
+    
+    // Update session in storage
+    saveSession(updatedSession);
+    
+    // Reset YouTube playback
+    setIsUsingYouTube(false);
   };
 
   const seekTo = (progress: number) => {
@@ -407,6 +629,14 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setSessions(prev => 
       prev.map(s => s.id === currentSession.id ? updatedSession : s)
     );
+    
+    // Update session in storage
+    saveSession(updatedSession);
+    
+    // Seek in YouTube player if active
+    if (isUsingYouTube && youtubePlayer.current) {
+      youtubePlayer.current.seekTo(progress, true);
+    }
   };
 
   const getSuggestions = (): SongSuggestion[] => {
@@ -438,7 +668,10 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       previousSong,
       seekTo,
       getSuggestions,
+      isUsingYouTube,
     }}>
+      {/* Hidden YouTube player */}
+      <div id="youtube-player" style={{ position: 'absolute', width: '1px', height: '1px', overflow: 'hidden', opacity: 0 }}></div>
       {children}
     </SessionContext.Provider>
   );
