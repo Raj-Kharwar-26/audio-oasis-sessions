@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useSession } from '@/context/SessionContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,21 +21,6 @@ const SessionList: React.FC = () => {
   const [joinSessionId, setJoinSessionId] = useState('');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isJoinDialogOpen, setIsJoinDialogOpen] = useState(false);
-  
-  useEffect(() => {
-    // Check for session ID in URL when component mounts
-    const urlParams = new URLSearchParams(window.location.search);
-    const sessionId = urlParams.get('session');
-    
-    if (sessionId) {
-      // Try to join the session from URL parameter
-      joinSession(sessionId);
-      
-      // Clear the URL parameter
-      const newUrl = window.location.pathname;
-      window.history.replaceState({}, '', newUrl);
-    }
-  }, [joinSession]);
   
   const handleCreateSession = (e: React.FormEvent) => {
     e.preventDefault();
