@@ -43,7 +43,7 @@ serve(async (req) => {
       );
     }
 
-    // Create search query for YouTube
+    // Create search query for YouTube - use "official audio" to get better results
     const searchQuery = `${songTitle} ${artist} official audio`;
     const encodedQuery = encodeURIComponent(searchQuery);
     
@@ -80,13 +80,15 @@ serve(async (req) => {
 
     const videoId = youtubeData.items[0].id.videoId;
     const videoTitle = youtubeData.items[0].snippet.title;
+    const thumbnailUrl = youtubeData.items[0].snippet.thumbnails?.high?.url || youtubeData.items[0].snippet.thumbnails?.default?.url;
     
     console.log(`Found YouTube video: "${videoTitle}" (${videoId})`);
 
     return new Response(
       JSON.stringify({ 
         videoId, 
-        title: videoTitle 
+        title: videoTitle,
+        thumbnail: thumbnailUrl
       }),
       { headers: corsHeaders }
     );

@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useSession } from '@/context/SessionContext';
 import { useAuth } from '@/context/AuthContext';
 import { 
@@ -14,6 +14,28 @@ import { formatTime } from '@/lib/utils';
 const MusicPlayer: React.FC = () => {
   const { currentSession, playerState, playPause, nextSong, previousSong, seekTo, isUsingYouTube } = useSession();
   const { user } = useAuth();
+  const [youtubeProgress, setYoutubeProgress] = useState<number>(0);
+  
+  // For YouTube playback, we need to update the progress based on the YouTube player
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    
+    if (isUsingYouTube && playerState === PlayerState.PLAYING && window.YT && window.YT.Player) {
+      interval = setInterval(() => {
+        try {
+          const player = document.getElementById('youtube-player') as any;
+          if (player && player.getCurrentTime) {
+            const currentTime = Math.floor(player.getCurrentTime());
+            setYoutubeProgress(currentTime);
+          }
+        } catch (error) {
+          console.error("Error getting YouTube progress:", error);
+        }
+      }, 1000);
+    }
+    
+    return () => clearInterval(interval);
+  }, [isUsingYouTube, playerState]);
   
   if (!currentSession || !currentSession.playlist.length) {
     return (
@@ -25,6 +47,7 @@ const MusicPlayer: React.FC = () => {
   
   const currentSong = currentSession.playlist[currentSession.currentSongIndex];
   const isHost = user?.id === currentSession.hostId;
+  const currentProgress = isUsingYouTube ? youtubeProgress : currentSession.progress;
   
   return (
     <div className="glass-card p-4 rounded-lg">
@@ -94,7 +117,7 @@ const MusicPlayer: React.FC = () => {
           {/* Progress bar */}
           <div className="mt-4 space-y-2">
             <Slider
-              value={[currentSession.progress]}
+              value={[currentProgress]}
               max={currentSong.duration}
               step={1}
               disabled={!isHost}
@@ -104,7 +127,7 @@ const MusicPlayer: React.FC = () => {
               className="w-full"
             />
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>{formatTime(currentSession.progress)}</span>
+              <span>{formatTime(currentProgress)}</span>
               <span>{formatTime(currentSong.duration)}</span>
             </div>
           </div>

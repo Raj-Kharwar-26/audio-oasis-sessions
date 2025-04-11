@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { Session, Song, Message, User, PlayerState, SongSuggestion } from '@/types';
 import { useAuth } from './AuthContext';
@@ -56,6 +55,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const userSessions = getUserSessions();
       if (userSessions.length > 0) {
         setSessions(userSessions);
+        console.log(`Loaded ${userSessions.length} sessions from storage`);
       }
     }
   }, [user]);
@@ -63,54 +63,86 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Load YouTube IFrame API
   useEffect(() => {
     if (!youtubeApiLoaded) {
-      const tag = document.createElement('script');
-      tag.src = 'https://www.youtube.com/iframe_api';
-      const firstScriptTag = document.getElementsByTagName('script')[0];
-      firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
+      console.log("Loading YouTube IFrame API...");
+      // Check if there's already a script tag for YouTube API
+      if (!document.getElementById('youtube-iframe-api')) {
+        const tag = document.createElement('script');
+        tag.id = 'youtube-iframe-api';
+        tag.src = 'https://www.youtube.com/iframe_api';
+        const firstScriptTag = document.getElementsByTagName('script')[0];
+        firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
+      }
 
+      // Set up the callback for when the API is ready
       window.onYouTubeIframeAPIReady = () => {
         setYoutubeApiLoaded(true);
         console.log('YouTube IFrame API ready');
       };
+
+      // Check if YouTube API is already loaded (in case the script was already there)
+      if (window.YT && window.YT.Player) {
+        setYoutubeApiLoaded(true);
+        console.log('YouTube IFrame API already loaded');
+      }
     }
   }, [youtubeApiLoaded]);
 
   // Initialize YouTube player when API is loaded
   useEffect(() => {
-    if (youtubeApiLoaded && !youtubePlayer.current && document.getElementById('youtube-player')) {
-      youtubePlayer.current = new window.YT.Player('youtube-player', {
-        height: '0',
-        width: '0',
-        playerVars: {
-          autoplay: 0,
-          controls: 0,
-          disablekb: 1,
-          fs: 0,
-          modestbranding: 1,
-          rel: 0
-        },
-        events: {
-          onReady: (event: any) => {
-            console.log('YouTube player ready');
+    if (youtubeApiLoaded && !youtubePlayer.current) {
+      console.log("Initializing YouTube player...");
+      
+      // Make sure the element exists before creating the player
+      if (!document.getElementById('youtube-player')) {
+        const playerDiv = document.createElement('div');
+        playerDiv.id = 'youtube-player';
+        playerDiv.style.position = 'absolute';
+        playerDiv.style.width = '1px';
+        playerDiv.style.height = '1px';
+        playerDiv.style.overflow = 'hidden';
+        playerDiv.style.opacity = '0';
+        document.body.appendChild(playerDiv);
+      }
+      
+      try {
+        youtubePlayer.current = new window.YT.Player('youtube-player', {
+          height: '0',
+          width: '0',
+          playerVars: {
+            autoplay: 0,
+            controls: 0,
+            disablekb: 1,
+            fs: 0,
+            modestbranding: 1,
+            rel: 0,
+            enablejsapi: 1
           },
-          onStateChange: (event: any) => {
-            if (event.data === window.YT.PlayerState.ENDED) {
-              // Auto-proceed to next song
+          events: {
+            onReady: (event: any) => {
+              console.log('YouTube player ready');
+            },
+            onStateChange: (event: any) => {
+              if (event.data === window.YT.PlayerState.ENDED) {
+                // Auto-proceed to next song
+                nextSong();
+              } else if (event.data === window.YT.PlayerState.PLAYING) {
+                setPlayerState(PlayerState.PLAYING);
+              } else if (event.data === window.YT.PlayerState.PAUSED) {
+                setPlayerState(PlayerState.PAUSED);
+              }
+            },
+            onError: (event: any) => {
+              console.error('YouTube player error:', event.data);
+              toast.error('Failed to play the song. Trying next song...');
+              setIsUsingYouTube(false);
               nextSong();
-            } else if (event.data === window.YT.PlayerState.PLAYING) {
-              setPlayerState(PlayerState.PLAYING);
-            } else if (event.data === window.YT.PlayerState.PAUSED) {
-              setPlayerState(PlayerState.PAUSED);
             }
-          },
-          onError: (event: any) => {
-            console.error('YouTube player error:', event.data);
-            toast.error('Failed to play the song. Trying next song...');
-            setIsUsingYouTube(false);
-            nextSong();
           }
-        }
-      });
+        });
+      } catch (error) {
+        console.error("Error initializing YouTube player:", error);
+        toast.error("Failed to initialize YouTube player. Music preview will be used instead.");
+      }
     }
   }, [youtubeApiLoaded]);
 
@@ -123,9 +155,33 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (!currentSong) return;
       
       try {
-        const videoId = await getYouTubeVideoId(currentSong.title, currentSong.artist);
+        // Check if the song already has a youtubeId
+        let videoId = currentSong.youtubeId;
+        
+        // If not, try to get one
+        if (!videoId) {
+          videoId = await getYouTubeVideoId(currentSong.title, currentSong.artist);
+          
+          // Save the videoId to the song for future use
+          if (videoId) {
+            const updatedPlaylist = [...currentSession.playlist];
+            updatedPlaylist[currentSession.currentSongIndex] = {
+              ...currentSong,
+              youtubeId: videoId
+            };
+            
+            setCurrentSession(prev => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                playlist: updatedPlaylist
+              };
+            });
+          }
+        }
         
         if (videoId) {
+          console.log(`Loading YouTube video: ${videoId}`);
           currentVideoId.current = videoId;
           youtubePlayer.current.loadVideoById(videoId);
           
@@ -137,6 +193,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
           
           setIsUsingYouTube(true);
         } else {
+          console.log("No YouTube video found, falling back to Spotify preview");
           setIsUsingYouTube(false);
         }
       } catch (error) {
@@ -184,32 +241,6 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return () => clearInterval(interval);
   }, [currentSession, playerState, isUsingYouTube]);
 
-  // Check for session ID in URL when component mounts
-  useEffect(() => {
-    const checkSessionInUrl = async () => {
-      const urlParams = new URLSearchParams(window.location.search);
-      const sessionId = urlParams.get('session');
-      
-      if (sessionId) {
-        // Get the session from storage
-        const session = await getSession(sessionId);
-        
-        if (session) {
-          // Join the session
-          joinSession(sessionId);
-        } else {
-          toast.error('Session not found or has ended');
-        }
-        
-        // Clear the URL parameter
-        const newUrl = window.location.pathname;
-        window.history.replaceState({}, '', newUrl);
-      }
-    };
-    
-    checkSessionInUrl();
-  }, []);
-
   const createSession = (name: string) => {
     if (!user) {
       toast.error('You must be logged in to create a session');
@@ -221,8 +252,11 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return;
     }
     
+    const sessionId = `session_${Date.now()}`;
+    console.log(`Creating new session: ${name} (ID: ${sessionId})`);
+    
     const newSession: Session = {
-      id: `session_${Date.now()}`,
+      id: sessionId,
       name: name.trim(),
       hostId: user.id,
       users: [user],
@@ -230,9 +264,10 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       currentSongIndex: 0,
       isPlaying: false,
       progress: 0,
+      timestamp: Date.now()
     };
     
-    setSessions(prev => [...prev, newSession]);
+    setSessions(prev => [newSession, ...prev]);
     setCurrentSession(newSession);
     setPlayerState(PlayerState.PAUSED);
     
@@ -257,6 +292,8 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return;
     }
     
+    console.log(`Attempting to join session: ${sessionId}`);
+    
     // First check user sessions
     let userSessions = getUserSessions();
     let session = userSessions.find(s => s.id === sessionId);
@@ -272,9 +309,12 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
     
     if (!session) {
+      console.error(`Session not found: ${sessionId}`);
       toast.error('Session not found or has ended');
       return;
     }
+    
+    console.log(`Found session: ${session.name} (ID: ${session.id})`);
     
     if (!session.users.find(u => u.id === user.id)) {
       const updatedSession = {

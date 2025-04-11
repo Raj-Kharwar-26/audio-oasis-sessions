@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Song, Session } from "@/types";
 import { toast } from "sonner";
@@ -84,6 +83,7 @@ export async function getYouTubeVideoId(songTitle: string, artist: string): Prom
       return null;
     }
 
+    console.log(`Found YouTube video ID: ${data.videoId} for ${songTitle}`);
     return data.videoId;
   } catch (error) {
     console.error("Error getting YouTube video:", error);
@@ -144,19 +144,23 @@ export async function saveSession(session: Session): Promise<boolean> {
       return false;
     }
     
-    // Store session info in localStorage for persistence
+    if (!session.timestamp) {
+      session.timestamp = Date.now();
+    }
+    
     const savedSessions = JSON.parse(localStorage.getItem('userSessions') || '[]');
     const sessionExists = savedSessions.some((s: Session) => s.id === session.id);
     
     if (!sessionExists) {
-      savedSessions.push(session);
+      savedSessions.unshift(session);
       localStorage.setItem('userSessions', JSON.stringify(savedSessions));
+      console.log(`New session saved: ${session.id} - ${session.name}`);
     } else {
-      // Update existing session
       const updatedSessions = savedSessions.map((s: Session) => 
         s.id === session.id ? session : s
       );
       localStorage.setItem('userSessions', JSON.stringify(updatedSessions));
+      console.log(`Session updated: ${session.id} - ${session.name}`);
     }
     
     return true;
@@ -169,8 +173,16 @@ export async function saveSession(session: Session): Promise<boolean> {
 
 export async function getSession(sessionId: string): Promise<Session | null> {
   try {
-    // Get sessions from localStorage
+    if (!sessionId) {
+      console.error("No session ID provided");
+      return null;
+    }
+    
+    console.log(`Attempting to find session: ${sessionId}`);
+    
     const savedSessions = JSON.parse(localStorage.getItem('userSessions') || '[]');
+    console.log(`Found ${savedSessions.length} total saved sessions`);
+    
     const session = savedSessions.find((s: Session) => s.id === sessionId);
     
     if (!session) {
@@ -178,6 +190,7 @@ export async function getSession(sessionId: string): Promise<Session | null> {
       return null;
     }
     
+    console.log(`Session found: ${session.name} (ID: ${session.id})`);
     return session;
   } catch (error) {
     console.error("Error getting session:", error);
@@ -187,8 +200,9 @@ export async function getSession(sessionId: string): Promise<Session | null> {
 
 export function getUserSessions(): Session[] {
   try {
-    // Get sessions from localStorage
-    return JSON.parse(localStorage.getItem('userSessions') || '[]');
+    const sessions = JSON.parse(localStorage.getItem('userSessions') || '[]');
+    console.log(`Retrieved ${sessions.length} user sessions from storage`);
+    return sessions;
   } catch (error) {
     console.error("Error getting user sessions:", error);
     return [];
@@ -197,10 +211,17 @@ export function getUserSessions(): Session[] {
 
 export function deleteSession(sessionId: string): boolean {
   try {
-    // Get sessions from localStorage
     const savedSessions = JSON.parse(localStorage.getItem('userSessions') || '[]');
+    const initialCount = savedSessions.length;
     const updatedSessions = savedSessions.filter((s: Session) => s.id !== sessionId);
+    
+    if (initialCount === updatedSessions.length) {
+      console.warn(`Session ${sessionId} not found for deletion`);
+      return false;
+    }
+    
     localStorage.setItem('userSessions', JSON.stringify(updatedSessions));
+    console.log(`Session ${sessionId} deleted. ${updatedSessions.length} sessions remaining.`);
     
     return true;
   } catch (error) {

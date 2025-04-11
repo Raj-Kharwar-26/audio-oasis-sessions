@@ -28,6 +28,7 @@ const Index = () => {
           console.log("Session found, joining:", session.name);
           // Join the session
           joinSession(sessionId);
+          toast.success(`Joined session: ${session.name}`);
         } else {
           console.log("Session not found:", sessionId);
           toast.error('Session not found or has ended');
