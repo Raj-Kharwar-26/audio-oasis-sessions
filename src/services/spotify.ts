@@ -28,14 +28,21 @@ export async function searchSongs(query: string): Promise<Song[]> {
       return [];
     }
 
-    if (!data || !data.tracks) {
-      console.warn("No tracks returned from search");
+    console.log("Spotify search response:", data);
+
+    if (!data || !Array.isArray(data.tracks) || data.tracks.length === 0) {
+      console.warn("No tracks returned from search or invalid response format");
       return [];
     }
 
     return data.tracks.map((track: any) => ({
-      ...track,
-      // Ensure all songs have the required properties
+      id: track.id,
+      title: track.title,
+      artist: track.artist,
+      album: track.album || "",
+      cover: track.cover || "",
+      duration: track.duration || 0,
+      url: track.url || "",
       votes: track.votes || [],
       addedBy: track.addedBy || userId || "system"
     }));

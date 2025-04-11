@@ -59,7 +59,7 @@ serve(async (req) => {
       );
     }
 
-    console.log("Token retrieved successfully, searching Spotify...");
+    console.log("Token retrieved successfully, searching Spotify with query:", query);
 
     // Save search query to history if userId is provided
     if (userId) {
@@ -69,9 +69,12 @@ serve(async (req) => {
       });
     }
 
-    // Search Spotify
+    // Search Spotify with proper encoding
+    const encodedQuery = encodeURIComponent(query);
+    console.log("Encoded query:", encodedQuery);
+    
     const spotifyResponse = await fetch(
-      `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=20`,
+      `https://api.spotify.com/v1/search?q=${encodedQuery}&type=track&limit=20&market=US`,
       {
         headers: {
           "Authorization": `Bearer ${tokenData.access_token}`,
@@ -90,22 +93,32 @@ serve(async (req) => {
     }
 
     console.log(`Found ${spotifyData.tracks?.items?.length || 0} tracks`);
+    
+    if (!spotifyData.tracks || !spotifyData.tracks.items || spotifyData.tracks.items.length === 0) {
+      console.log("No tracks found for query:", query);
+      return new Response(
+        JSON.stringify({ tracks: [] }),
+        { headers: corsHeaders }
+      );
+    }
 
     // Transform Spotify data to our format
-    const tracks = spotifyData.tracks?.items
+    const tracks = spotifyData.tracks.items
+      .filter(track => track !== null)
       .map(track => ({
         id: track.id,
         title: track.name,
         artist: track.artists.map(a => a.name).join(", "),
         album: track.album.name,
-        cover: track.album.images[0]?.url,
+        cover: track.album.images[0]?.url || "",
         duration: Math.round(track.duration_ms / 1000),
-        url: track.preview_url, // This can be null for some tracks
+        url: track.preview_url || "", // This can be null for some tracks
         addedBy: userId || "system",
         votes: []
-      }))
-      .filter(track => track !== null);
+      }));
 
+    console.log(`Successfully processed ${tracks.length} tracks`);
+    
     return new Response(
       JSON.stringify({ tracks }),
       { headers: corsHeaders }

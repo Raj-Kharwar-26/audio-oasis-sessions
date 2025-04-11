@@ -60,7 +60,9 @@ const SongSearch: React.FC = () => {
     
     setLoading(true);
     try {
-      const songs = await searchSongs(query);
+      console.log("Searching for:", query.trim());
+      const songs = await searchSongs(query.trim());
+      console.log("Search results:", songs);
       setResults(songs);
       
       if (songs.length === 0) {
