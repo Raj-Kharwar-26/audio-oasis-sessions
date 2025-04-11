@@ -10,7 +10,6 @@ import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { PlayerState } from '@/types';
 import { formatTime } from '@/lib/utils';
-import YouTubePlayer from './YouTubePlayer';
 
 const MusicPlayer: React.FC = () => {
   const { currentSession, playerState, playPause, nextSong, previousSong, seekTo } = useSession();
@@ -29,9 +28,6 @@ const MusicPlayer: React.FC = () => {
   
   return (
     <div className="glass-card p-4 rounded-lg">
-      {/* YouTube Player (hidden) */}
-      <YouTubePlayer />
-      
       <div className="flex flex-col md:flex-row gap-4 items-center">
         {/* Album art */}
         <div className="relative w-24 h-24 md:w-28 md:h-28 shrink-0">

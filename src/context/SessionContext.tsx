@@ -29,39 +29,12 @@ interface SessionContextType {
 
 const SessionContext = createContext<SessionContextType | undefined>(undefined);
 
-// Helper function to save sessions to localStorage
-const saveSessions = (sessions: Session[]) => {
-  try {
-    localStorage.setItem('music_sessions', JSON.stringify(sessions));
-  } catch (error) {
-    console.error('Error saving sessions to localStorage:', error);
-  }
-};
-
-// Helper function to load sessions from localStorage
-const loadSessions = (): Session[] => {
-  try {
-    const savedSessions = localStorage.getItem('music_sessions');
-    if (savedSessions) {
-      return JSON.parse(savedSessions);
-    }
-  } catch (error) {
-    console.error('Error loading sessions from localStorage:', error);
-  }
-  return mockSessions;
-};
-
 export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
-  const [sessions, setSessions] = useState<Session[]>(loadSessions);
+  const [sessions, setSessions] = useState<Session[]>(mockSessions);
   const [currentSession, setCurrentSession] = useState<Session | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [playerState, setPlayerState] = useState<PlayerState>(PlayerState.PAUSED);
-
-  // Save sessions to localStorage whenever they change
-  useEffect(() => {
-    saveSessions(sessions);
-  }, [sessions]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
