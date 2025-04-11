@@ -1,10 +1,10 @@
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { useSession } from '@/context/SessionContext';
 import { useAuth } from '@/context/AuthContext';
 import { 
   Play, Pause, SkipBack, SkipForward, 
-  Music, Volume2, Users, Youtube, Music2
+  Music, Volume2, Users
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
@@ -12,30 +12,8 @@ import { PlayerState } from '@/types';
 import { formatTime } from '@/lib/utils';
 
 const MusicPlayer: React.FC = () => {
-  const { currentSession, playerState, playPause, nextSong, previousSong, seekTo, isUsingYouTube } = useSession();
+  const { currentSession, playerState, playPause, nextSong, previousSong, seekTo } = useSession();
   const { user } = useAuth();
-  const [youtubeProgress, setYoutubeProgress] = useState<number>(0);
-  
-  // For YouTube playback, we need to update the progress based on the YouTube player
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    
-    if (isUsingYouTube && playerState === PlayerState.PLAYING && window.YT && window.YT.Player) {
-      interval = setInterval(() => {
-        try {
-          const player = document.getElementById('youtube-player') as any;
-          if (player && player.getCurrentTime) {
-            const currentTime = Math.floor(player.getCurrentTime());
-            setYoutubeProgress(currentTime);
-          }
-        } catch (error) {
-          console.error("Error getting YouTube progress:", error);
-        }
-      }, 1000);
-    }
-    
-    return () => clearInterval(interval);
-  }, [isUsingYouTube, playerState]);
   
   if (!currentSession || !currentSession.playlist.length) {
     return (
@@ -47,7 +25,6 @@ const MusicPlayer: React.FC = () => {
   
   const currentSong = currentSession.playlist[currentSession.currentSongIndex];
   const isHost = user?.id === currentSession.hostId;
-  const currentProgress = isUsingYouTube ? youtubeProgress : currentSession.progress;
   
   return (
     <div className="glass-card p-4 rounded-lg">
@@ -65,15 +42,6 @@ const MusicPlayer: React.FC = () => {
               <Music className="h-10 w-10 text-primary" />
             </div>
           )}
-          
-          {/* Audio source indicator */}
-          <div className="absolute top-2 right-2 bg-black bg-opacity-60 rounded-full p-1.5">
-            {isUsingYouTube ? (
-              <Youtube size={16} className="text-red-500" />
-            ) : (
-              <Music2 size={16} className="text-green-500" />
-            )}
-          </div>
           
           {/* Audio visualizer */}
           {playerState === PlayerState.PLAYING && (
@@ -97,9 +65,6 @@ const MusicPlayer: React.FC = () => {
               <p className="text-sm text-muted-foreground truncate max-w-[200px] md:max-w-xs">
                 {currentSong.artist}
               </p>
-              <div className="text-xs text-muted-foreground mt-1">
-                {isUsingYouTube ? 'Full song via YouTube' : 'Preview via Spotify'}
-              </div>
             </div>
             
             <div className="flex items-center gap-2">
@@ -117,7 +82,7 @@ const MusicPlayer: React.FC = () => {
           {/* Progress bar */}
           <div className="mt-4 space-y-2">
             <Slider
-              value={[currentProgress]}
+              value={[currentSession.progress]}
               max={currentSong.duration}
               step={1}
               disabled={!isHost}
@@ -127,7 +92,7 @@ const MusicPlayer: React.FC = () => {
               className="w-full"
             />
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>{formatTime(currentProgress)}</span>
+              <span>{formatTime(currentSession.progress)}</span>
               <span>{formatTime(currentSong.duration)}</span>
             </div>
           </div>
