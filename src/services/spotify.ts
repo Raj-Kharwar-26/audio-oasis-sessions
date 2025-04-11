@@ -8,6 +8,12 @@ export async function searchSongs(query: string): Promise<Song[]> {
     const { data: authData } = await supabase.auth.getUser();
     const userId = authData.user?.id;
     
+    if (!userId) {
+      console.error("User not authenticated");
+      toast.error("You must be logged in to search for songs");
+      return [];
+    }
+    
     console.log("Invoking Spotify search function with query:", query);
     const { data, error } = await supabase.functions.invoke("spotify-search", {
       body: { 
@@ -42,6 +48,15 @@ export async function searchSongs(query: string): Promise<Song[]> {
 
 export async function addSongToDatabase(song: Song): Promise<string | null> {
   try {
+    const { data: authData } = await supabase.auth.getUser();
+    const userId = authData.user?.id;
+    
+    if (!userId) {
+      console.error("User not authenticated");
+      toast.error("You must be logged in to add songs");
+      return null;
+    }
+    
     const { data, error } = await supabase
       .from("songs")
       .insert({
@@ -52,7 +67,7 @@ export async function addSongToDatabase(song: Song): Promise<string | null> {
         cover: song.cover,
         duration: song.duration,
         url: song.url,
-        added_by: song.addedBy
+        added_by: song.addedBy || userId
       })
       .select("id")
       .single();

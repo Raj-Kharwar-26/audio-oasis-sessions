@@ -1,11 +1,12 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSession } from '@/context/SessionContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Users, Music, Plus } from 'lucide-react';
+import { toast } from 'sonner';
 import { 
   Dialog,
   DialogContent,
@@ -17,13 +18,42 @@ import {
 const SessionList: React.FC = () => {
   const { sessions, joinSession, createSession } = useSession();
   const [newSessionName, setNewSessionName] = useState('');
+  const [joinSessionId, setJoinSessionId] = useState('');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isJoinDialogOpen, setIsJoinDialogOpen] = useState(false);
+  
+  useEffect(() => {
+    // Check for session ID in URL when component mounts
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionId = urlParams.get('session');
+    
+    if (sessionId) {
+      // Try to join the session from URL parameter
+      joinSession(sessionId);
+      
+      // Clear the URL parameter
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, '', newUrl);
+    }
+  }, [joinSession]);
   
   const handleCreateSession = (e: React.FormEvent) => {
     e.preventDefault();
     createSession(newSessionName);
     setNewSessionName('');
     setIsCreateDialogOpen(false);
+  };
+  
+  const handleJoinById = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!joinSessionId.trim()) {
+      toast.error('Please enter a valid session ID');
+      return;
+    }
+    
+    joinSession(joinSessionId.trim());
+    setJoinSessionId('');
+    setIsJoinDialogOpen(false);
   };
   
   return (
@@ -37,7 +67,32 @@ const SessionList: React.FC = () => {
         </p>
       </div>
       
-      <div className="flex justify-end">
+      <div className="flex justify-between">
+        <Dialog open={isJoinDialogOpen} onOpenChange={setIsJoinDialogOpen}>
+          <DialogTrigger asChild>
+            <Button variant="outline" className="gap-2">
+              Join by ID
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Join by Session ID</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleJoinById} className="space-y-4 mt-4">
+              <Input
+                placeholder="Enter session ID"
+                value={joinSessionId}
+                onChange={e => setJoinSessionId(e.target.value)}
+                className="bg-secondary/50"
+                required
+              />
+              <Button type="submit" className="w-full" disabled={!joinSessionId.trim()}>
+                Join Session
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
+        
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
             <Button className="gap-2">
