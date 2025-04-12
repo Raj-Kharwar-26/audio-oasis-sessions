@@ -275,14 +275,13 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       
       if (error) throw error;
       
-      // Add creator as a user in the session - IMPORTANT FIX: Removed user_email
+      // Add creator as a user in the session
       const { error: userError } = await supabase
         .from('session_users')
         .insert({
           session_id: sessionData.id,
           user_id: user.id,
           user_name: user.name
-          // Removed user_email as it doesn't exist in our database schema
         });
       
       if (userError) throw userError;
@@ -296,6 +295,19 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         timestamp: Date.now(),
       };
       setMessages([welcomeMsg]);
+      
+      // Update local sessions state
+      const newSession = mapSupabaseSession(
+        sessionData, 
+        [{ session_id: sessionData.id, user_id: user.id, user_name: user.name, joined_at: new Date() }], 
+        []
+      );
+      
+      setSessions(prev => [...prev, newSession]);
+      
+      if (user.id === sessionData.creator_id) {
+        setMySessions(prev => [...prev, newSession]);
+      }
       
       // Load the newly created session
       await joinSession(sessionData.id);
@@ -358,7 +370,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       // Check if user is already in the session
       const isUserInSession = usersData.some(u => u.user_id === user.id);
       
-      // If not, add them - IMPORTANT FIX: Removed user_email
+      // If not, add them
       if (!isUserInSession) {
         const { error: joinError } = await supabase
           .from('session_users')
@@ -366,7 +378,6 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
             session_id: sessionData.id,
             user_id: user.id,
             user_name: user.name
-            // Removed user_email as it doesn't exist in our database schema
           });
         
         if (joinError) throw joinError;

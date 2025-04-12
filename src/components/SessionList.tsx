@@ -21,29 +21,40 @@ const SessionList: React.FC = () => {
   const [roomIdToJoin, setRoomIdToJoin] = useState('');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isJoinDialogOpen, setIsJoinDialogOpen] = useState(false);
+  const [isCreatingSession, setIsCreatingSession] = useState(false);
   
-  const handleCreateSession = (e: React.FormEvent) => {
+  const handleCreateSession = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSessionName.trim()) {
       toast.error("Session name can't be empty");
       return;
     }
     
-    createSession(newSessionName);
-    setNewSessionName('');
-    setIsCreateDialogOpen(false);
+    setIsCreatingSession(true);
+    try {
+      const roomId = await createSession(newSessionName);
+      if (roomId) {
+        toast.success(`Session "${newSessionName}" created!`);
+        setNewSessionName('');
+        setIsCreateDialogOpen(false);
+      }
+    } finally {
+      setIsCreatingSession(false);
+    }
   };
   
-  const handleJoinByRoomId = (e: React.FormEvent) => {
+  const handleJoinByRoomId = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!roomIdToJoin.trim()) {
       toast.error("Room ID can't be empty");
       return;
     }
     
-    joinSession(roomIdToJoin.trim());
-    setRoomIdToJoin('');
-    setIsJoinDialogOpen(false);
+    const success = await joinSession(roomIdToJoin.trim());
+    if (success) {
+      setRoomIdToJoin('');
+      setIsJoinDialogOpen(false);
+    }
   };
   
   return (
@@ -77,8 +88,12 @@ const SessionList: React.FC = () => {
                 className="bg-secondary/50"
                 required
               />
-              <Button type="submit" className="w-full" disabled={!newSessionName.trim()}>
-                Create
+              <Button 
+                type="submit" 
+                className="w-full" 
+                disabled={isCreatingSession || !newSessionName.trim()}
+              >
+                {isCreatingSession ? "Creating..." : "Create"}
               </Button>
             </form>
           </DialogContent>
