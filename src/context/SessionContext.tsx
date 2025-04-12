@@ -48,7 +48,7 @@ const mapSupabaseSession = (
     users: usersData.map(userData => ({
       id: userData.user_id,
       name: userData.user_name || 'Unknown User',
-      email: userData.user_email,
+      email: '',
       createdAt: new Date(userData.joined_at).getTime()
     })),
     playlist: playlistData.map(song => ({
@@ -275,14 +275,14 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       
       if (error) throw error;
       
-      // Add creator as a user in the session
+      // Add creator as a user in the session - IMPORTANT FIX: Removed user_email
       const { error: userError } = await supabase
         .from('session_users')
         .insert({
           session_id: sessionData.id,
           user_id: user.id,
-          user_name: user.name,
-          user_email: user.email
+          user_name: user.name
+          // Removed user_email as it doesn't exist in our database schema
         });
       
       if (userError) throw userError;
@@ -391,15 +391,15 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       // Check if user is already in the session
       const isUserInSession = usersData.some(u => u.user_id === user.id);
       
-      // If not, add them
+      // If not, add them - IMPORTANT FIX: Removed user_email
       if (!isUserInSession) {
         const { error: joinError } = await supabase
           .from('session_users')
           .insert({
             session_id: sessionData.id,
             user_id: user.id,
-            user_name: user.name,
-            user_email: user.email
+            user_name: user.name
+            // Removed user_email as it doesn't exist in our database schema
           });
         
         if (joinError) throw joinError;
