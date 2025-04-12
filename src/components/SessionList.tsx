@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { Users, Music, Plus } from 'lucide-react';
+import { Users, Music, Plus, LogIn } from 'lucide-react';
 import { 
   Dialog,
   DialogContent,
@@ -13,17 +13,37 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { toast } from 'sonner';
 
 const SessionList: React.FC = () => {
   const { sessions, joinSession, createSession } = useSession();
   const [newSessionName, setNewSessionName] = useState('');
+  const [roomIdToJoin, setRoomIdToJoin] = useState('');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isJoinDialogOpen, setIsJoinDialogOpen] = useState(false);
   
   const handleCreateSession = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!newSessionName.trim()) {
+      toast.error("Session name can't be empty");
+      return;
+    }
+    
     createSession(newSessionName);
     setNewSessionName('');
     setIsCreateDialogOpen(false);
+  };
+  
+  const handleJoinByRoomId = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!roomIdToJoin.trim()) {
+      toast.error("Room ID can't be empty");
+      return;
+    }
+    
+    joinSession(roomIdToJoin.trim());
+    setRoomIdToJoin('');
+    setIsJoinDialogOpen(false);
   };
   
   return (
@@ -37,7 +57,7 @@ const SessionList: React.FC = () => {
         </p>
       </div>
       
-      <div className="flex justify-end">
+      <div className="flex justify-center gap-3">
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
             <Button className="gap-2">
@@ -59,6 +79,32 @@ const SessionList: React.FC = () => {
               />
               <Button type="submit" className="w-full" disabled={!newSessionName.trim()}>
                 Create
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
+        
+        <Dialog open={isJoinDialogOpen} onOpenChange={setIsJoinDialogOpen}>
+          <DialogTrigger asChild>
+            <Button variant="outline" className="gap-2">
+              <LogIn size={16} />
+              Join by ID
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Join by Room ID</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleJoinByRoomId} className="space-y-4 mt-4">
+              <Input
+                placeholder="Enter Room ID"
+                value={roomIdToJoin}
+                onChange={e => setRoomIdToJoin(e.target.value)}
+                className="bg-secondary/50"
+                required
+              />
+              <Button type="submit" className="w-full" disabled={!roomIdToJoin.trim()}>
+                Join Session
               </Button>
             </form>
           </DialogContent>

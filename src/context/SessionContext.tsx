@@ -297,39 +297,6 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       };
       setMessages([welcomeMsg]);
       
-      // Initialize session with default songs if needed (commented out due to error)
-      /*
-      const defaultSongsToAdd = mockSongs.slice(0, 2);
-      for (const song of defaultSongsToAdd) {
-        const { data: songData, error: songError } = await supabase
-          .from('songs')
-          .insert({
-            title: song.title,
-            artist: song.artist,
-            album: song.album,
-            cover: song.cover,
-            duration: song.duration,
-            url: song.url,
-            added_by: user.id,
-          })
-          .select()
-          .single();
-        
-        if (songError) throw songError;
-        
-        const { error: playlistError } = await supabase
-          .from('session_playlist')
-          .insert({
-            session_id: sessionData.id,
-            song_id: songData.id,
-            added_by: user.id,
-            position: defaultSongsToAdd.indexOf(song),
-          });
-        
-        if (playlistError) throw playlistError;
-      }
-      */
-      
       // Load the newly created session
       await joinSession(sessionData.id);
       
