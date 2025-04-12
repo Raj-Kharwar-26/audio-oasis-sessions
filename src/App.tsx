@@ -9,6 +9,7 @@ import { SessionProvider } from "@/context/SessionContext";
 import Index from "./pages/Index";
 import Explore from "./pages/Explore";
 import NotFound from "./pages/NotFound";
+import SessionRoute from "./pages/SessionRoute";
 
 const queryClient = new QueryClient();
 
@@ -18,15 +19,16 @@ const App = () => (
       <Toaster />
       <Sonner />
       <AuthProvider>
-        <SessionProvider>
-          <BrowserRouter>
+        <BrowserRouter>
+          <SessionProvider>
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/explore" element={<Explore />} />
+              <Route path="/session/:roomId" element={<SessionRoute />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
-          </BrowserRouter>
-        </SessionProvider>
+          </SessionProvider>
+        </BrowserRouter>
       </AuthProvider>
     </TooltipProvider>
   </QueryClientProvider>

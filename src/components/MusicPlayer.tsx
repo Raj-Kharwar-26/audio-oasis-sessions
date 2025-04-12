@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useSession } from '@/context/SessionContext';
 import { useAuth } from '@/context/AuthContext';
 import { 
@@ -12,7 +12,7 @@ import { PlayerState } from '@/types';
 import { formatTime } from '@/lib/utils';
 
 const MusicPlayer: React.FC = () => {
-  const { currentSession, playerState, playPause, nextSong, previousSong, seekTo } = useSession();
+  const { currentSession, playerState, playPause, nextSong, previousSong, seekTo, youtubePlayer } = useSession();
   const { user } = useAuth();
   
   if (!currentSession || !currentSession.playlist.length) {
@@ -26,8 +26,22 @@ const MusicPlayer: React.FC = () => {
   const currentSong = currentSession.playlist[currentSession.currentSongIndex];
   const isHost = user?.id === currentSession.hostId;
   
+  // Hidden YouTube player div
+  const playerContainerStyle = {
+    position: 'absolute',
+    top: '-9999px',
+    left: '-9999px',
+    width: '0',
+    height: '0',
+    opacity: 0,
+    pointerEvents: 'none',
+  } as React.CSSProperties;
+  
   return (
     <div className="glass-card p-4 rounded-lg">
+      {/* Hidden YouTube player */}
+      <div id="youtube-player" style={playerContainerStyle}></div>
+      
       <div className="flex flex-col md:flex-row gap-4 items-center">
         {/* Album art */}
         <div className="relative w-24 h-24 md:w-28 md:h-28 shrink-0">
@@ -83,7 +97,7 @@ const MusicPlayer: React.FC = () => {
           <div className="mt-4 space-y-2">
             <Slider
               value={[currentSession.progress]}
-              max={currentSong.duration}
+              max={currentSong.duration || 200} // Fallback duration if not available
               step={1}
               disabled={!isHost}
               onValueChange={([value]) => {
@@ -93,7 +107,7 @@ const MusicPlayer: React.FC = () => {
             />
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>{formatTime(currentSession.progress)}</span>
-              <span>{formatTime(currentSong.duration)}</span>
+              <span>{formatTime(currentSong.duration || 200)}</span>
             </div>
           </div>
           

@@ -1,21 +1,26 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Session, Song, Message, User, PlayerState, SongSuggestion } from '@/types';
 import { useAuth } from './AuthContext';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { v4 as uuidv4 } from 'uuid';
+import { useNavigate } from 'react-router-dom';
+import { YouTubePlayer } from '@/lib/YouTubePlayer';
 
-// Mock data for the demo
+// Mock data for fallback
 import { mockSessions, mockSongs } from '@/lib/mockData';
 
 interface SessionContextType {
   currentSession: Session | null;
   sessions: Session[];
+  mySessions: Session[];
   messages: Message[];
   playerState: PlayerState;
-  createSession: (name: string) => void;
-  joinSession: (sessionId: string) => void;
-  leaveSession: () => void;
+  youtubePlayer: YouTubePlayer | null;
+  createSession: (name: string) => Promise<string | null>;
+  joinSession: (sessionIdOrRoomId: string) => Promise<boolean>;
+  leaveSession: () => Promise<void>;
+  endSession: (sessionId: string) => Promise<void>;
   sendMessage: (text: string) => void;
   addSong: (song: SongSuggestion) => void;
   voteSong: (songId: string) => void;
@@ -25,157 +30,466 @@ interface SessionContextType {
   previousSong: () => void;
   seekTo: (progress: number) => void;
   getSuggestions: () => SongSuggestion[];
+  getSessionShareLink: (sessionId: string) => string;
 }
 
 const SessionContext = createContext<SessionContextType | undefined>(undefined);
 
+// Helper function to convert Supabase session to frontend Session type
+const mapSupabaseSession = (
+  sessionData: any, 
+  usersData: any[], 
+  playlistData: any[]
+): Session => {
+  return {
+    id: sessionData.id,
+    name: sessionData.name,
+    hostId: sessionData.creator_id,
+    users: usersData.map(userData => ({
+      id: userData.user_id,
+      name: userData.user_name || 'Unknown User',
+      email: userData.user_email,
+      createdAt: new Date(userData.joined_at).getTime()
+    })),
+    playlist: playlistData.map(song => ({
+      id: song.id,
+      title: song.title,
+      artist: song.artist,
+      album: song.album || '',
+      cover: song.cover || '',
+      duration: song.duration || 0,
+      url: song.url,
+      youtubeId: song.youtube_id,
+      addedBy: song.added_by,
+      votes: song.votes || []
+    })),
+    currentSongIndex: sessionData.current_song_index || 0,
+    isPlaying: sessionData.is_playing || false,
+    progress: sessionData.progress || 0,
+    roomId: sessionData.room_id || '',
+  };
+};
+
 export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user } = useAuth();
-  const [sessions, setSessions] = useState<Session[]>(mockSessions);
+  const { user, isAuthenticated } = useAuth();
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [mySessions, setMySessions] = useState<Session[]>([]);
   const [currentSession, setCurrentSession] = useState<Session | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [playerState, setPlayerState] = useState<PlayerState>(PlayerState.PAUSED);
+  const [youtubePlayer, setYoutubePlayer] = useState<YouTubePlayer | null>(null);
+  const navigate = useNavigate();
 
+  // Load sessions from Supabase
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    
+    const fetchSessions = async () => {
+      try {
+        const { data: sessionsData, error } = await supabase
+          .from('sessions')
+          .select('*')
+          .eq('status', 'active');
+        
+        if (error) throw error;
+        
+        const allSessions: Session[] = [];
+        
+        for (const sessionData of sessionsData) {
+          // Get users for each session
+          const { data: usersData, error: usersError } = await supabase
+            .from('session_users')
+            .select('*')
+            .eq('session_id', sessionData.id);
+          
+          if (usersError) throw usersError;
+          
+          // Get playlist for each session
+          const { data: playlistData, error: playlistError } = await supabase
+            .from('session_playlist')
+            .select('*, songs(*)')
+            .eq('session_id', sessionData.id)
+            .order('position', { ascending: true });
+          
+          if (playlistError) throw playlistError;
+          
+          const playlist = playlistData.map(item => item.songs);
+          
+          allSessions.push(mapSupabaseSession(sessionData, usersData, playlist));
+        }
+        
+        setSessions(allSessions);
+        
+        // Filter my sessions
+        if (user) {
+          setMySessions(allSessions.filter(session => session.hostId === user.id));
+        }
+      } catch (error) {
+        console.error('Error fetching sessions:', error);
+        toast.error('Failed to load sessions');
+        
+        // Fallback to mock data if there's an error
+        setSessions(mockSessions);
+      }
+    };
+    
+    fetchSessions();
+    
+    // Subscribe to session changes
+    const sessionsChannel = supabase
+      .channel('schema-db-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'sessions'
+        },
+        () => {
+          fetchSessions();
+        }
+      )
+      .subscribe();
+      
+    return () => {
+      supabase.removeChannel(sessionsChannel);
+    };
+  }, [isAuthenticated, user]);
+
+  // Set up YouTube player effect
+  useEffect(() => {
+    if (!currentSession) return;
+    
+    const currentSong = currentSession.playlist[currentSession.currentSongIndex];
+    if (!currentSong || !currentSong.youtubeId) return;
+    
+    if (!youtubePlayer) {
+      const player = new YouTubePlayer('youtube-player');
+      player.initialize()
+        .then(() => {
+          player.loadVideoById(currentSong.youtubeId);
+          if (currentSession.isPlaying) {
+            player.playVideo();
+            setPlayerState(PlayerState.PLAYING);
+          } else {
+            player.pauseVideo();
+            setPlayerState(PlayerState.PAUSED);
+          }
+          player.seekTo(currentSession.progress);
+          setYoutubePlayer(player);
+        })
+        .catch(error => {
+          console.error('Failed to initialize YouTube player:', error);
+          setPlayerState(PlayerState.ERROR);
+        });
+    } else {
+      youtubePlayer.loadVideoById(currentSong.youtubeId);
+      if (currentSession.isPlaying) {
+        youtubePlayer.playVideo();
+        setPlayerState(PlayerState.PLAYING);
+      } else {
+        youtubePlayer.pauseVideo();
+        setPlayerState(PlayerState.PAUSED);
+      }
+      youtubePlayer.seekTo(currentSession.progress);
+    }
+  }, [currentSession]);
+
+  // Cleanup player on unmount
+  useEffect(() => {
+    return () => {
+      if (youtubePlayer) {
+        youtubePlayer.destroy();
+      }
+    };
+  }, []);
+
+  // Progress sync effect
   useEffect(() => {
     let interval: NodeJS.Timeout;
     
     if (currentSession && currentSession.isPlaying && playerState === PlayerState.PLAYING) {
-      interval = setInterval(() => {
+      interval = setInterval(async () => {
+        if (!youtubePlayer) return;
+        
+        const currentTime = await youtubePlayer.getCurrentTime();
+        
         setCurrentSession(prev => {
           if (!prev) return prev;
           
           const currentSong = prev.playlist[prev.currentSongIndex];
           if (!currentSong) return prev;
           
-          const newProgress = prev.progress + 1;
-          
-          if (newProgress >= currentSong.duration) {
-            const nextIndex = (prev.currentSongIndex + 1) % prev.playlist.length;
-            return {
-              ...prev,
-              currentSongIndex: nextIndex,
-              progress: 0
-            };
-          }
-          
           return {
             ...prev,
-            progress: newProgress
+            progress: currentTime
           };
         });
       }, 1000);
     }
     
     return () => clearInterval(interval);
-  }, [currentSession, playerState]);
+  }, [currentSession, playerState, youtubePlayer]);
 
-  const createSession = (name: string) => {
+  const createSession = async (name: string): Promise<string | null> => {
     if (!user) {
       toast.error('You must be logged in to create a session');
-      return;
+      return null;
     }
     
     if (!name.trim()) {
       toast.error('Session name cannot be empty');
-      return;
+      return null;
     }
     
-    const newSession: Session = {
-      id: `session_${Date.now()}`,
-      name: name.trim(),
-      hostId: user.id,
-      users: [user],
-      playlist: [mockSongs[0], mockSongs[1]],
-      currentSongIndex: 0,
-      isPlaying: false,
-      progress: 0,
-    };
-    
-    setSessions(prev => [...prev, newSession]);
-    setCurrentSession(newSession);
-    setPlayerState(PlayerState.PAUSED);
-    
-    const welcomeMsg: Message = {
-      id: `msg_${Date.now()}`,
-      userId: 'system',
-      userName: 'System',
-      text: `Welcome to "${name}" session! Add some songs to the playlist and enjoy the music together.`,
-      timestamp: Date.now(),
-    };
-    setMessages([welcomeMsg]);
-    
-    toast.success(`Session "${name}" created!`);
+    try {
+      // Create session in Supabase
+      const { data: sessionData, error } = await supabase
+        .from('sessions')
+        .insert({
+          name: name.trim(),
+          creator_id: user.id,
+          room_id: null, // Will be auto-generated by the trigger
+          status: 'active',
+        })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      // Add creator as a user in the session
+      const { error: userError } = await supabase
+        .from('session_users')
+        .insert({
+          session_id: sessionData.id,
+          user_id: user.id,
+        });
+      
+      if (userError) throw userError;
+      
+      // Create initial welcome message
+      const welcomeMsg: Message = {
+        id: `msg_${Date.now()}`,
+        userId: 'system',
+        userName: 'System',
+        text: `Welcome to "${name}" session! Add some songs to the playlist and enjoy the music together.`,
+        timestamp: Date.now(),
+      };
+      setMessages([welcomeMsg]);
+      
+      // Initialize session with default songs
+      const defaultSongsToAdd = mockSongs.slice(0, 2);
+      for (const song of defaultSongsToAdd) {
+        const { data: songData, error: songError } = await supabase
+          .from('songs')
+          .insert({
+            title: song.title,
+            artist: song.artist,
+            album: song.album,
+            cover: song.cover,
+            duration: song.duration,
+            url: song.url,
+            added_by: user.id,
+          })
+          .select()
+          .single();
+        
+        if (songError) throw songError;
+        
+        const { error: playlistError } = await supabase
+          .from('session_playlist')
+          .insert({
+            session_id: sessionData.id,
+            song_id: songData.id,
+            added_by: user.id,
+            position: defaultSongsToAdd.indexOf(song),
+          });
+        
+        if (playlistError) throw playlistError;
+      }
+      
+      // Load the newly created session
+      await joinSession(sessionData.id);
+      
+      toast.success(`Session "${name}" created!`);
+      return sessionData.room_id;
+    } catch (error) {
+      console.error('Error creating session:', error);
+      toast.error('Failed to create session');
+      return null;
+    }
   };
 
-  const joinSession = (sessionId: string) => {
+  const joinSession = async (sessionIdOrRoomId: string): Promise<boolean> => {
     if (!user) {
       toast.error('You must be logged in to join a session');
-      return;
+      return false;
     }
     
-    const session = sessions.find(s => s.id === sessionId);
-    if (!session) {
-      toast.error('Session not found');
-      return;
-    }
-    
-    if (!session.users.find(u => u.id === user.id)) {
-      const updatedSession = {
-        ...session,
-        users: [...session.users, user]
-      };
+    try {
+      // Check if this is a room ID (shorter, alphanumeric) or a UUID
+      const isRoomId = sessionIdOrRoomId.length < 36;
       
-      setSessions(prev => 
-        prev.map(s => s.id === sessionId ? updatedSession : s)
-      );
+      // Query by room_id or direct id based on the input
+      const { data: sessionData, error: sessionError } = await supabase
+        .from('sessions')
+        .select('*')
+        .eq(isRoomId ? 'room_id' : 'id', sessionIdOrRoomId)
+        .eq('status', 'active')
+        .single();
       
-      const joinMsg: Message = {
-        id: `msg_${Date.now()}`,
-        userId: 'system',
-        userName: 'System',
-        text: `${user.name} joined the session`,
-        timestamp: Date.now(),
-      };
-      setMessages(prev => [...prev, joinMsg]);
+      if (sessionError) {
+        if (sessionError.code === 'PGRST116') {
+          toast.error('Session not found or has ended');
+        } else {
+          throw sessionError;
+        }
+        return false;
+      }
+      
+      // Get users for the session
+      const { data: usersData, error: usersError } = await supabase
+        .from('session_users')
+        .select('*')
+        .eq('session_id', sessionData.id);
+      
+      if (usersError) throw usersError;
+      
+      // Get playlist for the session
+      const { data: playlistData, error: playlistError } = await supabase
+        .from('session_playlist')
+        .select('*, songs(*)')
+        .eq('session_id', sessionData.id)
+        .order('position', { ascending: true });
+      
+      if (playlistError) throw playlistError;
+      
+      const playlist = playlistData.map(item => item.songs);
+      
+      // Check if user is already in the session
+      const isUserInSession = usersData.some(u => u.user_id === user.id);
+      
+      // If not, add them
+      if (!isUserInSession) {
+        const { error: joinError } = await supabase
+          .from('session_users')
+          .insert({
+            session_id: sessionData.id,
+            user_id: user.id,
+          });
+        
+        if (joinError) throw joinError;
+        
+        // Add join message
+        const joinMsg: Message = {
+          id: `msg_${Date.now()}`,
+          userId: 'system',
+          userName: 'System',
+          text: `${user.name} joined the session`,
+          timestamp: Date.now(),
+        };
+        setMessages(prev => [...prev, joinMsg]);
+      }
+      
+      // Set current session
+      const session = mapSupabaseSession(sessionData, usersData, playlist);
+      setCurrentSession(session);
+      setPlayerState(session.isPlaying ? PlayerState.PLAYING : PlayerState.PAUSED);
+      
+      // Redirect to the session view
+      navigate('/');
+      
+      toast.success(`Joined "${session.name}" session!`);
+      return true;
+    } catch (error) {
+      console.error('Error joining session:', error);
+      toast.error('Failed to join session');
+      return false;
     }
-    
-    setCurrentSession(session);
-    setPlayerState(session.isPlaying ? PlayerState.PLAYING : PlayerState.PAUSED);
-    
-    toast.success(`Joined "${session.name}" session!`);
   };
 
-  const leaveSession = () => {
+  const leaveSession = async () => {
     if (!user || !currentSession) return;
     
-    if (currentSession.hostId === user.id) {
-      toast.info(`Session "${currentSession.name}" has been closed`);
-      setSessions(prev => 
-        prev.filter(s => s.id !== currentSession.id)
-      );
-    } else {
-      const updatedSession = {
-        ...currentSession,
-        users: currentSession.users.filter(u => u.id !== user.id)
-      };
+    try {
+      // Remove user from session_users
+      const { error } = await supabase
+        .from('session_users')
+        .delete()
+        .eq('session_id', currentSession.id)
+        .eq('user_id', user.id);
       
-      setSessions(prev => 
-        prev.map(s => s.id === currentSession.id ? updatedSession : s)
-      );
+      if (error) throw error;
       
-      const leaveMsg: Message = {
-        id: `msg_${Date.now()}`,
-        userId: 'system',
-        userName: 'System',
-        text: `${user.name} left the session`,
-        timestamp: Date.now(),
-      };
-      setMessages(prev => [...prev, leaveMsg]);
+      // If user is host, consider ending the session
+      if (currentSession.hostId === user.id) {
+        await endSession(currentSession.id);
+      } else {
+        // Add leave message
+        const leaveMsg: Message = {
+          id: `msg_${Date.now()}`,
+          userId: 'system',
+          userName: 'System',
+          text: `${user.name} left the session`,
+          timestamp: Date.now(),
+        };
+        setMessages(prev => [...prev, leaveMsg]);
+      }
+      
+      // Clean up
+      if (youtubePlayer) {
+        youtubePlayer.pauseVideo();
+        youtubePlayer.destroy();
+        setYoutubePlayer(null);
+      }
+      
+      setCurrentSession(null);
+      setPlayerState(PlayerState.PAUSED);
+      setMessages([]);
+      
+      // Navigate back to home
+      navigate('/');
+    } catch (error) {
+      console.error('Error leaving session:', error);
+      toast.error('Failed to leave session');
     }
+  };
+
+  const endSession = async (sessionId: string) => {
+    if (!user) return;
     
-    setCurrentSession(null);
-    setPlayerState(PlayerState.PAUSED);
-    setMessages([]);
+    try {
+      // Update session status to 'ended'
+      const { error } = await supabase
+        .from('sessions')
+        .update({ status: 'ended' })
+        .eq('id', sessionId)
+        .eq('creator_id', user.id);
+      
+      if (error) throw error;
+      
+      toast.info(`Session has been closed`);
+      
+      // Clean up if this is the current session
+      if (currentSession && currentSession.id === sessionId) {
+        if (youtubePlayer) {
+          youtubePlayer.pauseVideo();
+          youtubePlayer.destroy();
+          setYoutubePlayer(null);
+        }
+        
+        setCurrentSession(null);
+        setPlayerState(PlayerState.PAUSED);
+        setMessages([]);
+      }
+      
+      // Refresh sessions
+      setSessions(prev => prev.filter(s => s.id !== sessionId));
+      setMySessions(prev => prev.filter(s => s.id !== sessionId));
+    } catch (error) {
+      console.error('Error ending session:', error);
+      toast.error('Failed to end session');
+    }
   };
 
   const sendMessage = (text: string) => {
@@ -192,221 +506,409 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setMessages(prev => [...prev, newMessage]);
   };
 
-  const addSong = (song: SongSuggestion) => {
+  const addSong = async (song: SongSuggestion) => {
     if (!user || !currentSession) return;
     
-    const newSong: Song = {
-      ...song,
-      id: `song_${Date.now()}`,
-      addedBy: user.id,
-      votes: [],
-    };
-    
-    const updatedSession = {
-      ...currentSession,
-      playlist: [...currentSession.playlist, newSong],
-    };
-    
-    setCurrentSession(updatedSession);
-    setSessions(prev => 
-      prev.map(s => s.id === currentSession.id ? updatedSession : s)
-    );
-    
-    const songMsg: Message = {
-      id: `msg_${Date.now()}`,
-      userId: 'system',
-      userName: 'System',
-      text: `${user.name} added "${song.title}" by ${song.artist} to the playlist`,
-      timestamp: Date.now(),
-    };
-    setMessages(prev => [...prev, songMsg]);
-    
-    toast.success(`Added "${song.title}" to the playlist`);
-  };
-
-  const voteSong = (songId: string) => {
-    if (!user || !currentSession) return;
-    
-    const songIndex = currentSession.playlist.findIndex(s => s.id === songId);
-    if (songIndex === -1) return;
-    
-    const song = currentSession.playlist[songIndex];
-    
-    let updatedVotes;
-    if (song.votes.includes(user.id)) {
-      updatedVotes = song.votes.filter(id => id !== user.id);
-    } else {
-      updatedVotes = [...song.votes, user.id];
-    }
-    
-    const updatedSong = {
-      ...song,
-      votes: updatedVotes,
-    };
-    
-    const updatedPlaylist = [...currentSession.playlist];
-    updatedPlaylist[songIndex] = updatedSong;
-    
-    if (songIndex !== currentSession.currentSongIndex) {
-      const currentSong = updatedPlaylist[currentSession.currentSongIndex];
-      const remainingSongs = updatedPlaylist
-        .filter((_, i) => i !== currentSession.currentSongIndex)
-        .sort((a, b) => b.votes.length - a.votes.length);
+    try {
+      // Add song to database
+      const { data: songData, error: songError } = await supabase
+        .from('songs')
+        .insert({
+          title: song.title,
+          artist: song.artist,
+          album: song.album || '',
+          cover: song.cover || '',
+          duration: song.duration || 0,
+          url: song.url,
+          youtube_id: song.youtubeId,
+          added_by: user.id,
+        })
+        .select()
+        .single();
       
-      updatedPlaylist.splice(0, updatedPlaylist.length);
-      updatedPlaylist.push(currentSong, ...remainingSongs);
-    }
-    
-    const updatedSession = {
-      ...currentSession,
-      playlist: updatedPlaylist,
-      currentSongIndex: 0,
-    };
-    
-    setCurrentSession(updatedSession);
-    setSessions(prev => 
-      prev.map(s => s.id === currentSession.id ? updatedSession : s)
-    );
-  };
-
-  const removeSong = (songId: string) => {
-    if (!user || !currentSession) return;
-    
-    const song = currentSession.playlist.find(s => s.id === songId);
-    if (!song || (user.id !== currentSession.hostId && user.id !== song.addedBy)) {
-      toast.error("You don't have permission to remove this song");
-      return;
-    }
-    
-    const updatedPlaylist = currentSession.playlist.filter(s => s.id !== songId);
-    
-    let updatedIndex = currentSession.currentSongIndex;
-    const removedIndex = currentSession.playlist.findIndex(s => s.id === songId);
-    
-    if (removedIndex < currentSession.currentSongIndex) {
-      updatedIndex--;
-    } else if (removedIndex === currentSession.currentSongIndex) {
-      updatedIndex = Math.min(updatedIndex, updatedPlaylist.length - 1);
-    }
-    
-    const updatedSession = {
-      ...currentSession,
-      playlist: updatedPlaylist,
-      currentSongIndex: Math.max(0, updatedIndex),
-      progress: removedIndex === currentSession.currentSongIndex ? 0 : currentSession.progress,
-    };
-    
-    setCurrentSession(updatedSession);
-    setSessions(prev => 
-      prev.map(s => s.id === currentSession.id ? updatedSession : s)
-    );
-    
-    toast.success(`Removed "${song.title}" from playlist`);
-  };
-
-  const playPause = () => {
-    if (!currentSession) return;
-    
-    if (user?.id !== currentSession.hostId) {
-      toast.error('Only the host can control playback');
-      return;
-    }
-    
-    const updatedSession = {
-      ...currentSession,
-      isPlaying: !currentSession.isPlaying,
-    };
-    
-    setCurrentSession(updatedSession);
-    setSessions(prev => 
-      prev.map(s => s.id === currentSession.id ? updatedSession : s)
-    );
-    
-    setPlayerState(updatedSession.isPlaying ? PlayerState.PLAYING : PlayerState.PAUSED);
-  };
-
-  const nextSong = () => {
-    if (!currentSession) return;
-    
-    if (user?.id !== currentSession.hostId) {
-      toast.error('Only the host can control playback');
-      return;
-    }
-    
-    if (currentSession.playlist.length <= 1) {
-      return;
-    }
-    
-    const nextIndex = (currentSession.currentSongIndex + 1) % currentSession.playlist.length;
-    
-    const updatedSession = {
-      ...currentSession,
-      currentSongIndex: nextIndex,
-      progress: 0,
-    };
-    
-    setCurrentSession(updatedSession);
-    setSessions(prev => 
-      prev.map(s => s.id === currentSession.id ? updatedSession : s)
-    );
-  };
-
-  const previousSong = () => {
-    if (!currentSession) return;
-    
-    if (user?.id !== currentSession.hostId) {
-      toast.error('Only the host can control playback');
-      return;
-    }
-    
-    if (currentSession.playlist.length <= 1) {
-      return;
-    }
-    
-    if (currentSession.progress > 3) {
-      const updatedSession = {
-        ...currentSession,
-        progress: 0,
+      if (songError) throw songError;
+      
+      // Get current playlist length
+      const { data: playlistData, error: playlistCountError } = await supabase
+        .from('session_playlist')
+        .select('position')
+        .eq('session_id', currentSession.id)
+        .order('position', { ascending: false })
+        .limit(1);
+      
+      if (playlistCountError) throw playlistCountError;
+      
+      const position = playlistData.length > 0 ? playlistData[0].position + 1 : 0;
+      
+      // Add to session playlist
+      const { error: addError } = await supabase
+        .from('session_playlist')
+        .insert({
+          session_id: currentSession.id,
+          song_id: songData.id,
+          added_by: user.id,
+          position,
+        });
+      
+      if (addError) throw addError;
+      
+      // Update local state
+      setCurrentSession(prev => {
+        if (!prev) return prev;
+        
+        const newSong: Song = {
+          ...song,
+          id: songData.id,
+          addedBy: user.id,
+          votes: [],
+          youtubeId: song.youtubeId,
+        };
+        
+        return {
+          ...prev,
+          playlist: [...prev.playlist, newSong],
+        };
+      });
+      
+      // Add message
+      const songMsg: Message = {
+        id: `msg_${Date.now()}`,
+        userId: 'system',
+        userName: 'System',
+        text: `${user.name} added "${song.title}" by ${song.artist} to the playlist`,
+        timestamp: Date.now(),
       };
+      setMessages(prev => [...prev, songMsg]);
       
-      setCurrentSession(updatedSession);
-      setSessions(prev => 
-        prev.map(s => s.id === currentSession.id ? updatedSession : s)
-      );
-      return;
+      toast.success(`Added "${song.title}" to the playlist`);
+    } catch (error) {
+      console.error('Error adding song:', error);
+      toast.error('Failed to add song to playlist');
     }
-    
-    const prevIndex = (currentSession.currentSongIndex - 1 + currentSession.playlist.length) % currentSession.playlist.length;
-    
-    const updatedSession = {
-      ...currentSession,
-      currentSongIndex: prevIndex,
-      progress: 0,
-    };
-    
-    setCurrentSession(updatedSession);
-    setSessions(prev => 
-      prev.map(s => s.id === currentSession.id ? updatedSession : s)
-    );
   };
 
-  const seekTo = (progress: number) => {
-    if (!currentSession) return;
+  const voteSong = async (songId: string) => {
+    if (!user || !currentSession) return;
+    
+    try {
+      // Find the song in the playlist
+      const songIndex = currentSession.playlist.findIndex(s => s.id === songId);
+      if (songIndex === -1) return;
+      
+      const song = currentSession.playlist[songIndex];
+      
+      // Check if user has already voted
+      const hasVoted = song.votes.includes(user.id);
+      
+      if (hasVoted) {
+        // Remove vote
+        const { error } = await supabase
+          .from('song_votes')
+          .delete()
+          .eq('song_id', songId)
+          .eq('user_id', user.id);
+        
+        if (error) throw error;
+        
+        // Update local state
+        setCurrentSession(prev => {
+          if (!prev) return prev;
+          
+          const updatedPlaylist = [...prev.playlist];
+          updatedPlaylist[songIndex] = {
+            ...updatedPlaylist[songIndex],
+            votes: updatedPlaylist[songIndex].votes.filter(id => id !== user.id)
+          };
+          
+          return {
+            ...prev,
+            playlist: updatedPlaylist
+          };
+        });
+      } else {
+        // Add vote
+        const { error } = await supabase
+          .from('song_votes')
+          .insert({
+            song_id: songId,
+            user_id: user.id,
+          });
+        
+        if (error) throw error;
+        
+        // Update local state
+        setCurrentSession(prev => {
+          if (!prev) return prev;
+          
+          const updatedPlaylist = [...prev.playlist];
+          updatedPlaylist[songIndex] = {
+            ...updatedPlaylist[songIndex],
+            votes: [...updatedPlaylist[songIndex].votes, user.id]
+          };
+          
+          return {
+            ...prev,
+            playlist: updatedPlaylist
+          };
+        });
+      }
+    } catch (error) {
+      console.error('Error voting for song:', error);
+      toast.error('Failed to vote for song');
+    }
+  };
+
+  const removeSong = async (songId: string) => {
+    if (!user || !currentSession) return;
+    
+    try {
+      const song = currentSession.playlist.find(s => s.id === songId);
+      if (!song) return;
+      
+      // Check permissions
+      if (user.id !== currentSession.hostId && user.id !== song.addedBy) {
+        toast.error("You don't have permission to remove this song");
+        return;
+      }
+      
+      // Remove from playlist
+      const { error } = await supabase
+        .from('session_playlist')
+        .delete()
+        .eq('session_id', currentSession.id)
+        .eq('song_id', songId);
+      
+      if (error) throw error;
+      
+      // Update local state
+      const removedIndex = currentSession.playlist.findIndex(s => s.id === songId);
+      let updatedIndex = currentSession.currentSongIndex;
+      
+      if (removedIndex < currentSession.currentSongIndex) {
+        updatedIndex--;
+      } else if (removedIndex === currentSession.currentSongIndex) {
+        updatedIndex = Math.min(updatedIndex, currentSession.playlist.length - 2);
+        
+        // Update the current song index in the database
+        const { error: updateError } = await supabase
+          .from('sessions')
+          .update({
+            current_song_index: Math.max(0, updatedIndex),
+            progress: removedIndex === currentSession.currentSongIndex ? 0 : currentSession.progress,
+          })
+          .eq('id', currentSession.id);
+        
+        if (updateError) throw updateError;
+      }
+      
+      setCurrentSession(prev => {
+        if (!prev) return prev;
+        
+        return {
+          ...prev,
+          playlist: prev.playlist.filter(s => s.id !== songId),
+          currentSongIndex: Math.max(0, updatedIndex),
+          progress: removedIndex === prev.currentSongIndex ? 0 : prev.progress,
+        };
+      });
+      
+      toast.success(`Removed "${song.title}" from playlist`);
+    } catch (error) {
+      console.error('Error removing song:', error);
+      toast.error('Failed to remove song from playlist');
+    }
+  };
+
+  const playPause = async () => {
+    if (!currentSession || !youtubePlayer) return;
     
     if (user?.id !== currentSession.hostId) {
       toast.error('Only the host can control playback');
       return;
     }
     
-    const updatedSession = {
-      ...currentSession,
-      progress,
-    };
+    try {
+      const newIsPlaying = !currentSession.isPlaying;
+      
+      // Update in database
+      const { error } = await supabase
+        .from('sessions')
+        .update({ is_playing: newIsPlaying })
+        .eq('id', currentSession.id);
+      
+      if (error) throw error;
+      
+      // Update local state
+      setCurrentSession(prev => {
+        if (!prev) return prev;
+        
+        return {
+          ...prev,
+          isPlaying: newIsPlaying,
+        };
+      });
+      
+      // Control player
+      if (newIsPlaying) {
+        youtubePlayer.playVideo();
+        setPlayerState(PlayerState.PLAYING);
+      } else {
+        youtubePlayer.pauseVideo();
+        setPlayerState(PlayerState.PAUSED);
+      }
+    } catch (error) {
+      console.error('Error toggling playback:', error);
+      toast.error('Failed to control playback');
+    }
+  };
+
+  const nextSong = async () => {
+    if (!currentSession || !youtubePlayer) return;
     
-    setCurrentSession(updatedSession);
-    setSessions(prev => 
-      prev.map(s => s.id === currentSession.id ? updatedSession : s)
-    );
+    if (user?.id !== currentSession.hostId) {
+      toast.error('Only the host can control playback');
+      return;
+    }
+    
+    if (currentSession.playlist.length <= 1) {
+      return;
+    }
+    
+    try {
+      const nextIndex = (currentSession.currentSongIndex + 1) % currentSession.playlist.length;
+      
+      // Update in database
+      const { error } = await supabase
+        .from('sessions')
+        .update({
+          current_song_index: nextIndex,
+          progress: 0,
+        })
+        .eq('id', currentSession.id);
+      
+      if (error) throw error;
+      
+      // Update local state
+      setCurrentSession(prev => {
+        if (!prev) return prev;
+        
+        return {
+          ...prev,
+          currentSongIndex: nextIndex,
+          progress: 0,
+        };
+      });
+      
+      // Load next song
+      const nextSong = currentSession.playlist[nextIndex];
+      if (nextSong && nextSong.youtubeId) {
+        youtubePlayer.loadVideoById(nextSong.youtubeId);
+        if (currentSession.isPlaying) {
+          youtubePlayer.playVideo();
+        } else {
+          youtubePlayer.pauseVideo();
+        }
+      }
+    } catch (error) {
+      console.error('Error changing to next song:', error);
+      toast.error('Failed to change song');
+    }
+  };
+
+  const previousSong = async () => {
+    if (!currentSession || !youtubePlayer) return;
+    
+    if (user?.id !== currentSession.hostId) {
+      toast.error('Only the host can control playback');
+      return;
+    }
+    
+    if (currentSession.playlist.length <= 1) {
+      return;
+    }
+    
+    try {
+      // If we're more than 3 seconds into the song, just restart it
+      const currentTime = await youtubePlayer.getCurrentTime();
+      if (currentTime > 3) {
+        await seekTo(0);
+        return;
+      }
+      
+      // Otherwise go to previous song
+      const prevIndex = (currentSession.currentSongIndex - 1 + currentSession.playlist.length) % currentSession.playlist.length;
+      
+      // Update in database
+      const { error } = await supabase
+        .from('sessions')
+        .update({
+          current_song_index: prevIndex,
+          progress: 0,
+        })
+        .eq('id', currentSession.id);
+      
+      if (error) throw error;
+      
+      // Update local state
+      setCurrentSession(prev => {
+        if (!prev) return prev;
+        
+        return {
+          ...prev,
+          currentSongIndex: prevIndex,
+          progress: 0,
+        };
+      });
+      
+      // Load previous song
+      const prevSong = currentSession.playlist[prevIndex];
+      if (prevSong && prevSong.youtubeId) {
+        youtubePlayer.loadVideoById(prevSong.youtubeId);
+        if (currentSession.isPlaying) {
+          youtubePlayer.playVideo();
+        } else {
+          youtubePlayer.pauseVideo();
+        }
+      }
+    } catch (error) {
+      console.error('Error changing to previous song:', error);
+      toast.error('Failed to change song');
+    }
+  };
+
+  const seekTo = async (progress: number) => {
+    if (!currentSession || !youtubePlayer) return;
+    
+    if (user?.id !== currentSession.hostId) {
+      toast.error('Only the host can control playback');
+      return;
+    }
+    
+    try {
+      // Update in database
+      const { error } = await supabase
+        .from('sessions')
+        .update({ progress })
+        .eq('id', currentSession.id);
+      
+      if (error) throw error;
+      
+      // Update local state
+      setCurrentSession(prev => {
+        if (!prev) return prev;
+        
+        return {
+          ...prev,
+          progress,
+        };
+      });
+      
+      // Seek in player
+      youtubePlayer.seekTo(progress);
+    } catch (error) {
+      console.error('Error seeking:', error);
+      toast.error('Failed to seek');
+    }
   };
 
   const getSuggestions = (): SongSuggestion[] => {
@@ -420,15 +922,25 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return suggestions;
   };
 
+  const getSessionShareLink = (sessionId: string): string => {
+    const session = sessions.find(s => s.id === sessionId);
+    if (!session) return '';
+    
+    return `${window.location.origin}/session/${session.roomId}`;
+  };
+
   return (
     <SessionContext.Provider value={{
       currentSession,
       sessions,
+      mySessions,
       messages,
       playerState,
+      youtubePlayer,
       createSession,
       joinSession,
       leaveSession,
+      endSession,
       sendMessage,
       addSong,
       voteSong,
@@ -438,6 +950,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       previousSong,
       seekTo,
       getSuggestions,
+      getSessionShareLink,
     }}>
       {children}
     </SessionContext.Provider>

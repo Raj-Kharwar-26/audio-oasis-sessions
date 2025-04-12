@@ -9,50 +9,36 @@ import { useAuth } from '@/context/AuthContext';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { formatTime } from '@/lib/utils';
 import { toast } from 'sonner';
-import { searchSongs } from '@/services/spotify';
+import { searchYouTubeSongs } from '@/services/youtube';
+import { YouTubePlayer } from '@/lib/YouTubePlayer';
 
 const SongSearch: React.FC = () => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Song[]>([]);
   const [loading, setLoading] = useState(false);
   const [currentPlayingSong, setCurrentPlayingSong] = useState<Song | null>(null);
-  const [audio] = useState(new Audio());
-  const [audioPlaying, setAudioPlaying] = useState(false);
+  const [previewPlayer, setPreviewPlayer] = useState<YouTubePlayer | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
   const { currentSession, addSong } = useSession();
   const { user } = useAuth();
   
-  // Clean up audio when component unmounts
+  // Initialize YouTube preview player
   useEffect(() => {
+    const player = new YouTubePlayer('preview-player');
+    player.initialize()
+      .then(() => {
+        setPreviewPlayer(player);
+      })
+      .catch(error => {
+        console.error('Failed to initialize YouTube preview player:', error);
+      });
+    
     return () => {
-      if (audio) {
-        audio.pause();
-        audio.src = '';
+      if (previewPlayer) {
+        previewPlayer.destroy();
       }
     };
-  }, [audio]);
-  
-  // Add event listeners to audio element
-  useEffect(() => {
-    const handleEnded = () => {
-      setCurrentPlayingSong(null);
-      setAudioPlaying(false);
-    };
-    
-    const handleError = (e: ErrorEvent) => {
-      console.error("Audio playback error:", e);
-      toast.error("Couldn't play this song preview");
-      setCurrentPlayingSong(null);
-      setAudioPlaying(false);
-    };
-    
-    audio.addEventListener('ended', handleEnded);
-    audio.addEventListener('error', handleError as EventListener);
-    
-    return () => {
-      audio.removeEventListener('ended', handleEnded);
-      audio.removeEventListener('error', handleError as EventListener);
-    };
-  }, [audio]);
+  }, []);
   
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,7 +46,7 @@ const SongSearch: React.FC = () => {
     
     setLoading(true);
     try {
-      const songs = await searchSongs(query);
+      const songs = await searchYouTubeSongs(query);
       setResults(songs);
       
       if (songs.length === 0) {
@@ -74,43 +60,32 @@ const SongSearch: React.FC = () => {
     }
   };
   
-  const handlePlayPause = (song: Song) => {
-    if (!song.url) {
-      toast.error("No preview available for this song");
+  const handlePlayPause = async (song: Song) => {
+    if (!previewPlayer) {
+      toast.error("Preview player is not ready yet");
+      return;
+    }
+    
+    if (!song.youtubeId) {
+      toast.error("No YouTube ID available for this song");
       return;
     }
     
     if (currentPlayingSong && currentPlayingSong.id === song.id) {
       // Already playing this song, so pause/resume
-      if (audio.paused) {
-        audio.play()
-          .then(() => setAudioPlaying(true))
-          .catch(err => {
-            console.error("Error playing audio:", err);
-            toast.error("Failed to play song preview");
-            setAudioPlaying(false);
-          });
+      if (isPlaying) {
+        await previewPlayer.pauseVideo();
+        setIsPlaying(false);
       } else {
-        audio.pause();
-        setAudioPlaying(false);
+        await previewPlayer.playVideo();
+        setIsPlaying(true);
       }
     } else {
       // Play a new song
-      if (currentPlayingSong) {
-        audio.pause();
-      }
-      
-      audio.src = song.url;
-      audio.play()
-        .then(() => {
-          setCurrentPlayingSong(song);
-          setAudioPlaying(true);
-        })
-        .catch(err => {
-          console.error("Error playing audio:", err);
-          toast.error("Failed to play song preview");
-          setAudioPlaying(false);
-        });
+      await previewPlayer.loadVideoById(song.youtubeId);
+      await previewPlayer.playVideo();
+      setCurrentPlayingSong(song);
+      setIsPlaying(true);
     }
   };
   
@@ -126,15 +101,30 @@ const SongSearch: React.FC = () => {
       album: song.album,
       cover: song.cover,
       duration: song.duration,
-      url: song.url
+      url: song.url,
+      youtubeId: song.youtubeId
     });
     
     toast.success(`Added "${song.title}" to the session playlist`);
   };
   
+  // Hidden YouTube player div
+  const playerContainerStyle = {
+    position: 'absolute',
+    top: '-9999px',
+    left: '-9999px',
+    width: '0',
+    height: '0',
+    opacity: 0,
+    pointerEvents: 'none',
+  } as React.CSSProperties;
+  
   return (
     <div className="glass-card p-6 rounded-lg">
       <h2 className="text-xl font-bold mb-4">Search for Songs</h2>
+      
+      {/* Hidden YouTube player for previews */}
+      <div id="preview-player" style={playerContainerStyle}></div>
       
       <form onSubmit={handleSearch} className="flex gap-2 mb-6">
         <Input
@@ -180,14 +170,14 @@ const SongSearch: React.FC = () => {
                     size="icon"
                     className="h-8 w-8"
                     onClick={() => handlePlayPause(song)}
-                    disabled={!song.url}
-                    title={song.url ? "Play preview" : "No preview available"}
+                    disabled={!song.youtubeId}
+                    title={song.youtubeId ? "Play preview" : "No preview available"}
                   >
-                    {currentPlayingSong && currentPlayingSong.id === song.id && audioPlaying ? (
+                    {currentPlayingSong && currentPlayingSong.id === song.id && isPlaying ? (
                       <Pause size={16} />
                     ) : (
                       <>
-                        {song.url ? (
+                        {song.youtubeId ? (
                           <Play size={16} />
                         ) : (
                           <AlertCircle size={16} className="text-muted-foreground" />

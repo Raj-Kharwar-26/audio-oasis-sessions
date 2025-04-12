@@ -15,6 +15,7 @@ export interface Song {
   cover?: string;
   duration: number;
   url: string;
+  youtubeId?: string;
   addedBy: string;
   votes: string[];
 }
@@ -36,6 +37,7 @@ export interface Session {
   currentSongIndex: number;
   isPlaying: boolean;
   progress: number;
+  roomId: string;
 }
 
 export type SongSuggestion = Omit<Song, 'id' | 'addedBy' | 'votes'>;

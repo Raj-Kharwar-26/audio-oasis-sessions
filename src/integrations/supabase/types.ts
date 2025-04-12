@@ -30,6 +30,113 @@ export type Database = {
         }
         Relationships: []
       }
+      session_playlist: {
+        Row: {
+          added_by: string
+          created_at: string
+          id: string
+          position: number
+          session_id: string
+          song_id: string
+        }
+        Insert: {
+          added_by: string
+          created_at?: string
+          id?: string
+          position: number
+          session_id: string
+          song_id: string
+        }
+        Update: {
+          added_by?: string
+          created_at?: string
+          id?: string
+          position?: number
+          session_id?: string
+          song_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_playlist_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "session_playlist_song_id_fkey"
+            columns: ["song_id"]
+            isOneToOne: false
+            referencedRelation: "songs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      session_users: {
+        Row: {
+          id: string
+          joined_at: string
+          session_id: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          joined_at?: string
+          session_id: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          joined_at?: string
+          session_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_users_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sessions: {
+        Row: {
+          created_at: string
+          creator_id: string
+          current_song_index: number
+          id: string
+          is_playing: boolean
+          name: string
+          progress: number
+          room_id: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          creator_id: string
+          current_song_index?: number
+          id?: string
+          is_playing?: boolean
+          name: string
+          progress?: number
+          room_id: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          creator_id?: string
+          current_song_index?: number
+          id?: string
+          is_playing?: boolean
+          name?: string
+          progress?: number
+          room_id?: string
+          status?: string
+        }
+        Relationships: []
+      }
       song_votes: {
         Row: {
           created_at: string | null
@@ -103,7 +210,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      generate_room_id: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never
