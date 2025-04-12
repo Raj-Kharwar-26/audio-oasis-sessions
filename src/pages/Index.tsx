@@ -6,17 +6,8 @@ import { useSession } from '@/context/SessionContext';
 import AuthForm from '@/components/AuthForm';
 import SessionList from '@/components/SessionList';
 import SessionView from '@/components/SessionView';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { 
-  Card, 
-  CardContent, 
-  CardDescription, 
-  CardFooter, 
-  CardHeader, 
-  CardTitle 
-} from '@/components/ui/card';
-import { Share, Link, Copy, UserPlus } from 'lucide-react';
+import JoinSessionForm from '@/components/JoinSessionForm';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { 
   Dialog,
   DialogContent,
@@ -26,32 +17,14 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { Session } from '@/types';
+import { Share, Link, Copy, UserPlus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 const Index = () => {
   const { isAuthenticated, isLoading } = useAuth();
   const { currentSession, sessions, mySessions, joinSession, getSessionShareLink } = useSession();
-  const [roomId, setRoomId] = useState('');
-  const [joiningSession, setJoiningSession] = useState(false);
   const [selectedSession, setSelectedSession] = useState<Session | null>(null);
   const [showShareDialog, setShowShareDialog] = useState(false);
-  
-  const handleJoinSession = async () => {
-    if (!roomId.trim()) {
-      toast.error('Please enter a room ID');
-      return;
-    }
-    
-    setJoiningSession(true);
-    try {
-      const success = await joinSession(roomId.trim());
-      if (!success) {
-        toast.error('Invalid room ID or session has ended');
-      }
-    } finally {
-      setJoiningSession(false);
-      setRoomId('');
-    }
-  };
   
   const handleCopy = (text: string, what: string) => {
     navigator.clipboard.writeText(text)
@@ -94,20 +67,7 @@ const Index = () => {
         {/* Join Session by Room ID */}
         <div className="glass-card p-6 rounded-lg">
           <h2 className="text-xl font-bold mb-4">Join a Session by Room ID</h2>
-          <div className="flex gap-2">
-            <Input
-              placeholder="Enter room ID"
-              value={roomId}
-              onChange={(e) => setRoomId(e.target.value)}
-              className="bg-secondary/50"
-            />
-            <Button 
-              onClick={handleJoinSession} 
-              disabled={joiningSession}
-            >
-              {joiningSession ? "Joining..." : "Join"}
-            </Button>
-          </div>
+          <JoinSessionForm />
         </div>
         
         {/* My Sessions Section */}
@@ -119,9 +79,9 @@ const Index = () => {
                 <Card key={session.id} className="glass-card overflow-hidden transition-all duration-300 hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-1">
                   <CardHeader>
                     <CardTitle className="text-xl">{session.name}</CardTitle>
-                    <CardDescription>
+                    <div className="text-sm text-muted-foreground">
                       <span>Created by you</span>
-                    </CardDescription>
+                    </div>
                   </CardHeader>
                   
                   <CardContent>
@@ -133,10 +93,18 @@ const Index = () => {
                         <UserPlus size={14} />
                         <span>{session.users.length} listeners</span>
                       </p>
+                      
+                      {session.playlist.length > 0 && session.playlist[session.currentSongIndex] && (
+                        <div className="mt-4 p-2 bg-secondary/20 rounded-md">
+                          <p className="text-xs text-muted-foreground">Currently playing:</p>
+                          <p className="text-sm font-medium">{session.playlist[session.currentSongIndex].title}</p>
+                          <p className="text-xs">{session.playlist[session.currentSongIndex].artist}</p>
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                   
-                  <CardFooter className="flex gap-2">
+                  <div className="flex px-6 pb-6 gap-2">
                     <Button 
                       className="flex-1" 
                       onClick={() => joinSession(session.id)}
@@ -153,7 +121,7 @@ const Index = () => {
                     >
                       <Share size={16} />
                     </Button>
-                  </CardFooter>
+                  </div>
                 </Card>
               ))}
             </div>

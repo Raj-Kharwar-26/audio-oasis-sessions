@@ -1,4 +1,5 @@
 
+// YouTubePlayer class for controlling YouTube playback
 export class YouTubePlayer {
   private player: YT.Player | null = null;
   private containerId: string;
@@ -77,12 +78,17 @@ export class YouTubePlayer {
             },
             onStateChange: (event) => {
               console.log("YouTube player state changed:", event.data);
+              // Auto-play next song when current one ends (state 0 = ended)
+              if (event.data === YT.PlayerState.ENDED) {
+                const customEvent = new CustomEvent('youtube-player-ended');
+                document.dispatchEvent(customEvent);
+              }
             }
           }
         });
       });
     } catch (error) {
-      this.readyReject(error);
+      this.readyReject(error as Error);
       throw error;
     }
   }

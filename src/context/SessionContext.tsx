@@ -195,6 +195,24 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, [currentSession]);
 
+  // Add YouTube player ended event listener for autoplay
+  useEffect(() => {
+    const handleSongEnded = () => {
+      if (currentSession) {
+        // Only auto-play if there are more songs in the playlist
+        if (currentSession.currentSongIndex < currentSession.playlist.length - 1) {
+          nextSong();
+        }
+      }
+    };
+
+    document.addEventListener('youtube-player-ended', handleSongEnded);
+    
+    return () => {
+      document.removeEventListener('youtube-player-ended', handleSongEnded);
+    };
+  }, [currentSession]);
+
   // Cleanup player on unmount
   useEffect(() => {
     return () => {
@@ -263,6 +281,8 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         .insert({
           session_id: sessionData.id,
           user_id: user.id,
+          user_name: user.name,
+          user_email: user.email
         });
       
       if (userError) throw userError;
@@ -277,7 +297,8 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       };
       setMessages([welcomeMsg]);
       
-      // Initialize session with default songs
+      // Initialize session with default songs if needed (commented out due to error)
+      /*
       const defaultSongsToAdd = mockSongs.slice(0, 2);
       for (const song of defaultSongsToAdd) {
         const { data: songData, error: songError } = await supabase
@@ -307,6 +328,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         
         if (playlistError) throw playlistError;
       }
+      */
       
       // Load the newly created session
       await joinSession(sessionData.id);
@@ -376,6 +398,8 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
           .insert({
             session_id: sessionData.id,
             user_id: user.id,
+            user_name: user.name,
+            user_email: user.email
           });
         
         if (joinError) throw joinError;

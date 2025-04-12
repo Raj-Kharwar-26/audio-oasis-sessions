@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Song } from '@/types';
 import { Button } from '@/components/ui/button';
 import { formatTime, truncate } from '@/lib/utils';
-import { Heart, Music, Trash2, Play } from 'lucide-react';
+import { Heart, Music, Trash2, Play, Volume2 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import AddSongForm from './AddSongForm';
@@ -41,7 +41,15 @@ const SongItem: React.FC<{
       
       {/* Song info */}
       <div className="flex-1 min-w-0">
-        <p className="font-medium truncate">{song.title}</p>
+        <div className="flex items-center gap-2">
+          <p className="font-medium truncate">{song.title}</p>
+          {isPlaying && (
+            <span className="text-xs text-primary flex items-center">
+              <Volume2 size={12} className="mr-1" />
+              Now Playing
+            </span>
+          )}
+        </div>
         <p className="text-xs text-muted-foreground truncate">{song.artist}</p>
       </div>
       
@@ -122,7 +130,14 @@ const Playlist: React.FC = () => {
     <div className="glass-card rounded-lg overflow-hidden">
       <Tabs defaultValue="queue">
         <TabsList className="w-full">
-          <TabsTrigger value="queue" className="flex-1">Queue ({currentSession.playlist.length})</TabsTrigger>
+          <TabsTrigger value="queue" className="flex-1">
+            Queue ({currentSession.playlist.length})
+            {currentSession.playlist.length > 0 && (
+              <span className="ml-2 text-xs bg-secondary px-2 py-0.5 rounded-full">
+                Now: {currentSession.currentSongIndex + 1}/{currentSession.playlist.length}
+              </span>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="add" className="flex-1">Add Songs</TabsTrigger>
         </TabsList>
         
