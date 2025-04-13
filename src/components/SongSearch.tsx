@@ -338,7 +338,7 @@ const SongSearch: React.FC = () => {
       </form>
       
       {results.length > 0 ? (
-        <ScrollArea className={isMobile ? "h-[350px]" : "h-[calc(100vh-320px)]"} className="pr-4">
+        <ScrollArea className={isMobile ? "h-[350px]" : "h-[calc(100vh-320px)]"}>
           <div className="space-y-2">
             {results.map(song => (
               <div key={song.id} className="flex items-center p-3 rounded-md hover:bg-secondary/20 gap-3">

@@ -1,29 +1,36 @@
+
 import React, { useState } from 'react';
 import { useSession } from '@/context/SessionContext';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { Users, Music, Plus, LogIn } from 'lucide-react';
+import { Users, Music, Plus, LogIn, Share2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+
 const SessionList: React.FC = () => {
   const {
     sessions,
     joinSession,
-    createSession
+    createSession,
+    getSessionShareLink
   } = useSession();
   const [newSessionName, setNewSessionName] = useState('');
   const [roomIdToJoin, setRoomIdToJoin] = useState('');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isJoinDialogOpen, setIsJoinDialogOpen] = useState(false);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
+  const navigate = useNavigate();
+  
   const handleCreateSession = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSessionName.trim()) {
       toast.error("Session name can't be empty");
       return;
     }
+    
     setIsCreatingSession(true);
     try {
       const roomId = await createSession(newSessionName);
@@ -31,23 +38,39 @@ const SessionList: React.FC = () => {
         toast.success(`Session "${newSessionName}" created!`);
         setNewSessionName('');
         setIsCreateDialogOpen(false);
+        // No need to navigate here as createSession in context will handle it
       }
     } finally {
       setIsCreatingSession(false);
     }
   };
+  
   const handleJoinByRoomId = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!roomIdToJoin.trim()) {
       toast.error("Room ID can't be empty");
       return;
     }
+    
     const success = await joinSession(roomIdToJoin.trim());
     if (success) {
       setRoomIdToJoin('');
       setIsJoinDialogOpen(false);
+      // The session context will handle navigation
     }
   };
+  
+  const handleCopySessionLink = (sessionId: string) => {
+    const link = getSessionShareLink(sessionId);
+    navigator.clipboard.writeText(link)
+      .then(() => {
+        toast.success("Session link copied to clipboard!");
+      })
+      .catch(() => {
+        toast.error("Failed to copy link");
+      });
+  };
+  
   return <div className="space-y-8">
       <div className="flex flex-col items-center text-center space-y-4">
         <h1 className="text-3xl md:text-4xl font-bold text-gradient">
@@ -100,7 +123,8 @@ const SessionList: React.FC = () => {
         </Dialog>
       </div>
       
-      
+      {/* We've removed the sessions preview section as requested */}
     </div>;
 };
+
 export default SessionList;

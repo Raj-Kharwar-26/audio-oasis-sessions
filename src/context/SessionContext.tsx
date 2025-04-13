@@ -309,8 +309,9 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setMySessions(prev => [...prev, newSession]);
       }
       
-      // Load the newly created session
-      await joinSession(sessionData.id);
+      // Set current session and redirect to home
+      setCurrentSession(newSession);
+      navigate('/');
       
       toast.success(`Session "${name}" created!`);
       return sessionData.room_id;
@@ -804,11 +805,13 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       // Load next song
       const nextSong = currentSession.playlist[nextIndex];
       if (nextSong && nextSong.youtubeId) {
-        youtubePlayer.loadVideoById(nextSong.youtubeId);
+        await youtubePlayer.loadVideoById(nextSong.youtubeId);
         if (currentSession.isPlaying) {
-          youtubePlayer.playVideo();
+          await youtubePlayer.playVideo();
+          setPlayerState(PlayerState.PLAYING);
         } else {
-          youtubePlayer.pauseVideo();
+          await youtubePlayer.pauseVideo();
+          setPlayerState(PlayerState.PAUSED);
         }
       }
     } catch (error) {
@@ -865,11 +868,13 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       // Load previous song
       const prevSong = currentSession.playlist[prevIndex];
       if (prevSong && prevSong.youtubeId) {
-        youtubePlayer.loadVideoById(prevSong.youtubeId);
+        await youtubePlayer.loadVideoById(prevSong.youtubeId);
         if (currentSession.isPlaying) {
-          youtubePlayer.playVideo();
+          await youtubePlayer.playVideo();
+          setPlayerState(PlayerState.PLAYING);
         } else {
-          youtubePlayer.pauseVideo();
+          await youtubePlayer.pauseVideo();
+          setPlayerState(PlayerState.PAUSED);
         }
       }
     } catch (error) {
