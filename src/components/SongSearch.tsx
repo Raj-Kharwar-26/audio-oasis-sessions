@@ -2,10 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Play, Pause, Plus, AlertCircle, SkipForward, SkipBack, Repeat } from 'lucide-react';
+import { Search, Play, Pause, Plus, AlertCircle, SkipForward, SkipBack, Repeat, X } from 'lucide-react';
 import { Song } from '@/types';
-import { useSession } from '@/context/SessionContext';
-import { useAuth } from '@/context/AuthContext';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { formatTime } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -22,8 +20,6 @@ const SongSearch: React.FC = () => {
   const [previewPlayer, setPreviewPlayer] = useState<YouTubePlayer | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
-  const { currentSession, addSong } = useSession();
-  const { user } = useAuth();
   const isMobile = useIsMobile();
   
   // Initialize YouTube preview player
@@ -32,6 +28,7 @@ const SongSearch: React.FC = () => {
     player.initialize()
       .then(() => {
         setPreviewPlayer(player);
+        console.log("YouTube player initialized successfully");
       })
       .catch(error => {
         console.error('Failed to initialize YouTube preview player:', error);
@@ -102,11 +99,17 @@ const SongSearch: React.FC = () => {
       }
     } else {
       // Play a new song
-      await previewPlayer.loadVideoById(song.youtubeId);
-      await previewPlayer.playVideo();
-      setCurrentPlayingSong(song);
-      setIsPlaying(true);
-      setCurrentTime(0);
+      try {
+        await previewPlayer.loadVideoById(song.youtubeId);
+        await previewPlayer.playVideo();
+        setCurrentPlayingSong(song);
+        setIsPlaying(true);
+        setCurrentTime(0);
+        console.log(`Now playing: ${song.title} with ID: ${song.youtubeId}`);
+      } catch (error) {
+        console.error("Error playing song:", error);
+        toast.error("Failed to play song. Please try again.");
+      }
     }
   };
   
@@ -140,23 +143,12 @@ const SongSearch: React.FC = () => {
     setCurrentTime(value);
   };
   
-  const handleAddToSession = (song: Song) => {
-    if (!currentSession || !user) {
-      toast.error("You need to join a session first to add songs");
-      return;
-    }
-    
-    addSong({
-      title: song.title,
-      artist: song.artist,
-      album: song.album,
-      cover: song.cover,
-      duration: song.duration,
-      url: song.url,
-      youtubeId: song.youtubeId
-    });
-    
-    toast.success(`Added "${song.title}" to the session playlist`);
+  const handleClosePlayer = async () => {
+    if (!previewPlayer) return;
+    await previewPlayer.pauseVideo();
+    setIsPlaying(false);
+    setCurrentPlayingSong(null);
+    setCurrentTime(0);
   };
   
   // Hidden YouTube player div
@@ -214,6 +206,16 @@ const SongSearch: React.FC = () => {
             >
               <SkipForward size={16} />
             </Button>
+            
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={handleClosePlayer}
+              title="Close player"
+            >
+              <X size={16} />
+            </Button>
           </div>
         </div>
       </div>
@@ -225,7 +227,17 @@ const SongSearch: React.FC = () => {
     if (!currentPlayingSong) return null;
     
     return (
-      <div className="glass-card p-6 rounded-lg h-full flex flex-col">
+      <div className="glass-card p-6 rounded-lg h-full flex flex-col relative">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="absolute top-2 right-2 h-8 w-8"
+          onClick={handleClosePlayer}
+          title="Close player"
+        >
+          <X size={16} />
+        </Button>
+        
         <h2 className="text-xl font-bold mb-6">Now Playing</h2>
         
         <div className="flex flex-col items-center mb-6">
@@ -304,17 +316,6 @@ const SongSearch: React.FC = () => {
             >
               <SkipForward size={18} />
             </Button>
-            
-            {currentSession && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => handleAddToSession(currentPlayingSong)}
-                title="Add to session playlist"
-              >
-                <Plus size={18} />
-              </Button>
-            )}
           </div>
         </div>
       </div>
@@ -384,18 +385,6 @@ const SongSearch: React.FC = () => {
                       </>
                     )}
                   </Button>
-                  
-                  {currentSession && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => handleAddToSession(song)}
-                      title="Add to session playlist"
-                    >
-                      <Plus size={16} />
-                    </Button>
-                  )}
                 </div>
               </div>
             ))}
@@ -407,7 +396,7 @@ const SongSearch: React.FC = () => {
         </div>
       ) : !query ? (
         <div className="text-center py-8 text-muted-foreground">
-          <p>Search for songs to play or add to your session</p>
+          <p>Search for songs to play</p>
         </div>
       ) : null}
     </div>

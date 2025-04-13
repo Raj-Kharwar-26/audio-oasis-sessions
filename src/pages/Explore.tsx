@@ -37,7 +37,7 @@ const Explore: React.FC = () => {
             Explore Music
           </h1>
           <p className="text-lg text-muted-foreground max-w-md">
-            Discover and listen to music independently or add to your sessions
+            Discover and listen to music from YouTube
           </p>
         </div>
         
