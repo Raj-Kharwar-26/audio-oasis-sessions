@@ -32,7 +32,7 @@ const Explore: React.FC = () => {
   return (
     <Layout>
       <div className="space-y-8">
-        <div className="flex flex-col items-center text-center space-y-4">
+        <div className="flex flex-col items-center text-center space-y-4 mb-6">
           <h1 className="text-3xl md:text-4xl font-bold text-gradient">
             Explore Music
           </h1>

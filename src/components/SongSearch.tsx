@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Play, Pause, Plus, AlertCircle } from 'lucide-react';
+import { Search, Play, Pause, Plus, AlertCircle, SkipForward, SkipBack, Repeat } from 'lucide-react';
 import { Song } from '@/types';
 import { useSession } from '@/context/SessionContext';
 import { useAuth } from '@/context/AuthContext';
@@ -11,6 +11,8 @@ import { formatTime } from '@/lib/utils';
 import { toast } from 'sonner';
 import { searchYouTubeSongs } from '@/services/youtube';
 import { YouTubePlayer } from '@/lib/YouTubePlayer';
+import { Progress } from '@/components/ui/progress';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 const SongSearch: React.FC = () => {
   const [query, setQuery] = useState('');
@@ -19,8 +21,10 @@ const SongSearch: React.FC = () => {
   const [currentPlayingSong, setCurrentPlayingSong] = useState<Song | null>(null);
   const [previewPlayer, setPreviewPlayer] = useState<YouTubePlayer | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
   const { currentSession, addSong } = useSession();
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   
   // Initialize YouTube preview player
   useEffect(() => {
@@ -39,6 +43,22 @@ const SongSearch: React.FC = () => {
       }
     };
   }, []);
+  
+  // Update current time
+  useEffect(() => {
+    if (!isPlaying || !previewPlayer) return;
+    
+    const interval = setInterval(async () => {
+      try {
+        const time = await previewPlayer.getCurrentTime();
+        setCurrentTime(time);
+      } catch (error) {
+        console.error('Error getting current time:', error);
+      }
+    }, 1000);
+    
+    return () => clearInterval(interval);
+  }, [isPlaying, previewPlayer]);
   
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,7 +106,38 @@ const SongSearch: React.FC = () => {
       await previewPlayer.playVideo();
       setCurrentPlayingSong(song);
       setIsPlaying(true);
+      setCurrentTime(0);
     }
+  };
+  
+  const handleSeekForward = async () => {
+    if (!previewPlayer || !currentPlayingSong) return;
+    const newTime = currentTime + 10;
+    await previewPlayer.seekTo(newTime);
+    setCurrentTime(newTime);
+  };
+  
+  const handleSeekBackward = async () => {
+    if (!previewPlayer || !currentPlayingSong) return;
+    const newTime = Math.max(0, currentTime - 10);
+    await previewPlayer.seekTo(newTime);
+    setCurrentTime(newTime);
+  };
+  
+  const handleRestart = async () => {
+    if (!previewPlayer || !currentPlayingSong) return;
+    await previewPlayer.seekTo(0);
+    setCurrentTime(0);
+    if (!isPlaying) {
+      await previewPlayer.playVideo();
+      setIsPlaying(true);
+    }
+  };
+  
+  const handleProgressChange = async (value: number) => {
+    if (!previewPlayer || !currentPlayingSong) return;
+    await previewPlayer.seekTo(value);
+    setCurrentTime(value);
   };
   
   const handleAddToSession = (song: Song) => {
@@ -119,12 +170,160 @@ const SongSearch: React.FC = () => {
     pointerEvents: 'none',
   } as React.CSSProperties;
   
-  return (
-    <div className="glass-card p-6 rounded-lg">
+  // Mobile sticky player
+  const renderMobilePlayer = () => {
+    if (!currentPlayingSong) return null;
+    
+    return (
+      <div className="fixed bottom-0 left-0 right-0 bg-background border-t border-border p-2 z-10 glass-card">
+        <div className="flex items-center gap-2">
+          <div className="h-10 w-10 shrink-0 rounded overflow-hidden">
+            {currentPlayingSong.cover ? (
+              <img 
+                src={currentPlayingSong.cover} 
+                alt={`${currentPlayingSong.title} cover`} 
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div className="h-full w-full bg-secondary flex items-center justify-center">
+                <Search className="h-4 w-4" />
+              </div>
+            )}
+          </div>
+          
+          <div className="flex-1 min-w-0 mr-2">
+            <p className="font-medium truncate text-sm">{currentPlayingSong.title}</p>
+            <Progress value={(currentTime / currentPlayingSong.duration) * 100} className="h-1 mt-1" />
+          </div>
+          
+          <div className="flex items-center">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => handlePlayPause(currentPlayingSong)}
+            >
+              {isPlaying ? <Pause size={16} /> : <Play size={16} />}
+            </Button>
+            
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={handleSeekForward}
+            >
+              <SkipForward size={16} />
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+  
+  // Desktop "Now Playing" panel
+  const renderDesktopPlayer = () => {
+    if (!currentPlayingSong) return null;
+    
+    return (
+      <div className="glass-card p-6 rounded-lg h-full flex flex-col">
+        <h2 className="text-xl font-bold mb-6">Now Playing</h2>
+        
+        <div className="flex flex-col items-center mb-6">
+          <div className="h-40 w-40 rounded-lg overflow-hidden mb-4">
+            {currentPlayingSong.cover ? (
+              <img 
+                src={currentPlayingSong.cover} 
+                alt={`${currentPlayingSong.title} cover`} 
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div className="h-full w-full bg-secondary flex items-center justify-center">
+                <Search className="h-12 w-12 text-primary" />
+              </div>
+            )}
+          </div>
+          
+          <h3 className="text-lg font-semibold text-center">{currentPlayingSong.title}</h3>
+          <p className="text-sm text-muted-foreground text-center">{currentPlayingSong.artist}</p>
+        </div>
+        
+        <div className="space-y-4 mt-auto">
+          <div>
+            <div className="relative">
+              <Progress 
+                value={(currentTime / currentPlayingSong.duration) * 100} 
+                className="h-2"
+              />
+              <input
+                type="range"
+                min="0"
+                max={currentPlayingSong.duration}
+                value={currentTime}
+                onChange={(e) => handleProgressChange(Number(e.target.value))}
+                className="absolute inset-0 opacity-0 cursor-pointer w-full"
+              />
+            </div>
+            <div className="flex justify-between text-xs text-muted-foreground mt-1">
+              <span>{formatTime(currentTime)}</span>
+              <span>{formatTime(currentPlayingSong.duration)}</span>
+            </div>
+          </div>
+          
+          <div className="flex justify-center items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleRestart}
+              title="Restart"
+            >
+              <Repeat size={18} />
+            </Button>
+            
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleSeekBackward}
+              title="Rewind 10s"
+            >
+              <SkipBack size={18} />
+            </Button>
+            
+            <Button
+              size="icon"
+              onClick={() => handlePlayPause(currentPlayingSong)}
+              className="h-12 w-12 bg-primary hover:bg-primary/90"
+            >
+              {isPlaying ? <Pause size={24} /> : <Play size={24} />}
+            </Button>
+            
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleSeekForward}
+              title="Forward 10s"
+            >
+              <SkipForward size={18} />
+            </Button>
+            
+            {currentSession && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => handleAddToSession(currentPlayingSong)}
+                title="Add to session playlist"
+              >
+                <Plus size={18} />
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+  
+  const renderSearchResults = () => (
+    <div className="glass-card p-6 rounded-lg h-full">
       <h2 className="text-xl font-bold mb-4">Search for Songs</h2>
-      
-      {/* Hidden YouTube player for previews */}
-      <div id="preview-player" style={playerContainerStyle}></div>
       
       <form onSubmit={handleSearch} className="flex gap-2 mb-6">
         <Input
@@ -139,7 +338,7 @@ const SongSearch: React.FC = () => {
       </form>
       
       {results.length > 0 ? (
-        <ScrollArea className="h-[350px] pr-4">
+        <ScrollArea className={isMobile ? "h-[350px]" : "h-[calc(100vh-320px)]"} className="pr-4">
           <div className="space-y-2">
             {results.map(song => (
               <div key={song.id} className="flex items-center p-3 rounded-md hover:bg-secondary/20 gap-3">
@@ -212,6 +411,41 @@ const SongSearch: React.FC = () => {
         </div>
       ) : null}
     </div>
+  );
+  
+  // Hidden YouTube player for previews
+  const hiddenPlayer = (
+    <div id="preview-player" style={playerContainerStyle}></div>
+  );
+  
+  // Main render based on screen size and playing state
+  if (isMobile) {
+    return (
+      <>
+        {hiddenPlayer}
+        {renderSearchResults()}
+        {currentPlayingSong && renderMobilePlayer()}
+      </>
+    );
+  }
+  
+  // Desktop view with split layout when a song is playing
+  return (
+    <>
+      {hiddenPlayer}
+      {currentPlayingSong ? (
+        <div className="grid grid-cols-3 gap-6">
+          <div className="col-span-2">
+            {renderSearchResults()}
+          </div>
+          <div className="col-span-1">
+            {renderDesktopPlayer()}
+          </div>
+        </div>
+      ) : (
+        renderSearchResults()
+      )}
+    </>
   );
 };
 
