@@ -1,12 +1,23 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import Layout from '@/components/Layout';
 import { useAuth } from '@/context/AuthContext';
 import AuthForm from '@/components/AuthForm';
 import SongSearch from '@/components/SongSearch';
+import { Button } from '@/components/ui/button';
+import { Plus, Users } from 'lucide-react';
+import SessionView from '@/components/SessionView';
+import { useSession } from '@/context/SessionContext';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { toast } from 'sonner';
 
 const Explore: React.FC = () => {
   const { isAuthenticated, isLoading } = useAuth();
+  const { currentSession, createSession } = useSession();
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [roomName, setRoomName] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
   
   if (isLoading) {
     return (
@@ -28,6 +39,35 @@ const Explore: React.FC = () => {
       </Layout>
     );
   }
+
+  const handleCreateRoom = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!roomName.trim()) {
+      toast.error("Room name can't be empty");
+      return;
+    }
+    
+    setIsCreating(true);
+    try {
+      await createSession(roomName);
+      setRoomName('');
+      setShowCreateDialog(false);
+    } catch (error) {
+      toast.error("Failed to create room");
+      console.error(error);
+    } finally {
+      setIsCreating(false);
+    }
+  };
+  
+  // If in a session, show the session view
+  if (currentSession) {
+    return (
+      <Layout>
+        <SessionView />
+      </Layout>
+    );
+  }
   
   return (
     <Layout>
@@ -39,10 +79,43 @@ const Explore: React.FC = () => {
           <p className="text-lg text-muted-foreground max-w-md">
             Discover and listen to music from YouTube
           </p>
+          
+          {/* Create Room Button */}
+          <Button 
+            onClick={() => setShowCreateDialog(true)}
+            className="mt-2 gap-2"
+          >
+            <Plus size={16} />
+            <Users size={16} />
+            Create Listening Room
+          </Button>
         </div>
         
         <SongSearch />
       </div>
+      
+      {/* Create Room Dialog */}
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create a Listening Room</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCreateRoom} className="space-y-4 mt-4">
+            <div>
+              <Input
+                placeholder="Enter room name"
+                value={roomName}
+                onChange={(e) => setRoomName(e.target.value)}
+                className="bg-secondary/50"
+                disabled={isCreating}
+              />
+            </div>
+            <Button type="submit" className="w-full" disabled={isCreating}>
+              {isCreating ? "Creating..." : "Create Room"}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 };

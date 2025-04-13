@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Play, Pause, Plus, AlertCircle, SkipForward, SkipBack, Repeat, X } from 'lucide-react';
+import { Search, Play, Pause, Plus, AlertCircle, SkipForward, SkipBack, Repeat, X, Music, UserPlus } from 'lucide-react';
 import { Song } from '@/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { formatTime } from '@/lib/utils';
@@ -11,6 +10,7 @@ import { searchYouTubeSongs } from '@/services/youtube';
 import { YouTubePlayer } from '@/lib/YouTubePlayer';
 import { Progress } from '@/components/ui/progress';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useSession } from '@/context/SessionContext';
 
 const SongSearch: React.FC = () => {
   const [query, setQuery] = useState('');
@@ -21,8 +21,8 @@ const SongSearch: React.FC = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const isMobile = useIsMobile();
+  const { currentSession, addSong } = useSession();
   
-  // Initialize YouTube preview player
   useEffect(() => {
     const player = new YouTubePlayer('preview-player');
     player.initialize()
@@ -41,7 +41,6 @@ const SongSearch: React.FC = () => {
     };
   }, []);
   
-  // Update current time
   useEffect(() => {
     if (!isPlaying || !previewPlayer) return;
     
@@ -89,7 +88,6 @@ const SongSearch: React.FC = () => {
     }
     
     if (currentPlayingSong && currentPlayingSong.id === song.id) {
-      // Already playing this song, so pause/resume
       if (isPlaying) {
         await previewPlayer.pauseVideo();
         setIsPlaying(false);
@@ -98,7 +96,6 @@ const SongSearch: React.FC = () => {
         setIsPlaying(true);
       }
     } else {
-      // Play a new song
       try {
         await previewPlayer.loadVideoById(song.youtubeId);
         await previewPlayer.playVideo();
@@ -111,6 +108,15 @@ const SongSearch: React.FC = () => {
         toast.error("Failed to play song. Please try again.");
       }
     }
+  };
+  
+  const handleAddToRoom = (song: Song) => {
+    if (!currentSession) {
+      toast.error("You need to create or join a room first");
+      return;
+    }
+    
+    addSong(song);
   };
   
   const handleSeekForward = async () => {
@@ -151,7 +157,6 @@ const SongSearch: React.FC = () => {
     setCurrentTime(0);
   };
   
-  // Hidden YouTube player div
   const playerContainerStyle = {
     position: 'absolute',
     top: '-9999px',
@@ -162,7 +167,6 @@ const SongSearch: React.FC = () => {
     pointerEvents: 'none',
   } as React.CSSProperties;
   
-  // Mobile sticky player
   const renderMobilePlayer = () => {
     if (!currentPlayingSong) return null;
     
@@ -222,7 +226,6 @@ const SongSearch: React.FC = () => {
     );
   };
   
-  // Desktop "Now Playing" panel
   const renderDesktopPlayer = () => {
     if (!currentPlayingSong) return null;
     
@@ -317,6 +320,18 @@ const SongSearch: React.FC = () => {
               <SkipForward size={18} />
             </Button>
           </div>
+          
+          {currentSession && (
+            <Button 
+              className="w-full mt-4 gap-2"
+              onClick={() => handleAddToRoom(currentPlayingSong)}
+              variant="outline"
+            >
+              <Plus size={16} />
+              <Music size={16} />
+              Add to Room
+            </Button>
+          )}
         </div>
       </div>
     );
@@ -385,6 +400,18 @@ const SongSearch: React.FC = () => {
                       </>
                     )}
                   </Button>
+                  
+                  {currentSession && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => handleAddToRoom(song)}
+                      title="Add to room"
+                    >
+                      <Plus size={16} />
+                    </Button>
+                  )}
                 </div>
               </div>
             ))}
@@ -402,12 +429,10 @@ const SongSearch: React.FC = () => {
     </div>
   );
   
-  // Hidden YouTube player for previews
   const hiddenPlayer = (
     <div id="preview-player" style={playerContainerStyle}></div>
   );
   
-  // Main render based on screen size and playing state
   if (isMobile) {
     return (
       <>
@@ -418,7 +443,6 @@ const SongSearch: React.FC = () => {
     );
   }
   
-  // Desktop view with split layout when a song is playing
   return (
     <>
       {hiddenPlayer}

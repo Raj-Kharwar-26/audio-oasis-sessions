@@ -2,12 +2,11 @@
 import React, { useState } from 'react';
 import { useSession } from '@/context/SessionContext';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Share } from 'lucide-react';
+import { ArrowLeft, Share, Copy, Link, Users } from 'lucide-react';
 import MusicPlayer from './MusicPlayer';
 import Playlist from './Playlist';
 import ChatBox from './ChatBox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Copy, Link } from 'lucide-react';
 import { toast } from 'sonner';
 
 const SessionView: React.FC = () => {
@@ -35,8 +34,12 @@ const SessionView: React.FC = () => {
           Leave Session
         </Button>
         
-        <h2 className="text-xl font-semibold">
+        <h2 className="text-xl font-semibold flex items-center gap-2">
           {currentSession.name}
+          <span className="text-xs bg-secondary/50 px-2 py-1 rounded-full flex items-center gap-1">
+            <Users size={12} />
+            {currentSession.users.length}
+          </span>
         </h2>
         
         <Button 
@@ -46,7 +49,7 @@ const SessionView: React.FC = () => {
           onClick={() => setShowShareDialog(true)}
         >
           <Share size={16} />
-          Share
+          Invite Friends
         </Button>
       </div>
       
@@ -61,7 +64,7 @@ const SessionView: React.FC = () => {
       <Dialog open={showShareDialog} onOpenChange={setShowShareDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Share Session</DialogTitle>
+            <DialogTitle>Invite Friends to Join</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
@@ -99,6 +102,12 @@ const SessionView: React.FC = () => {
                 <Link size={14} />
                 <code className="text-xs">{getSessionShareLink(currentSession.id)}</code>
               </div>
+            </div>
+            
+            <div className="mt-6 text-center">
+              <p className="text-sm text-muted-foreground">
+                Anyone with this link or ID can join your listening session in real-time
+              </p>
             </div>
           </div>
         </DialogContent>
