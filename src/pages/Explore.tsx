@@ -50,11 +50,12 @@ const Explore: React.FC = () => {
     setIsCreating(true);
     try {
       await createSession(roomName);
+      toast.success(`Session "${roomName}" created successfully!`);
       setRoomName('');
       setShowCreateDialog(false);
     } catch (error) {
-      toast.error("Failed to create room");
-      console.error(error);
+      console.error("Error creating session:", error);
+      toast.error("Failed to create room. Please try again.");
     } finally {
       setIsCreating(false);
     }
@@ -84,6 +85,7 @@ const Explore: React.FC = () => {
           <Button 
             onClick={() => setShowCreateDialog(true)}
             className="mt-2 gap-2"
+            size="lg"
           >
             <Plus size={16} />
             <Users size={16} />
@@ -108,6 +110,7 @@ const Explore: React.FC = () => {
                 onChange={(e) => setRoomName(e.target.value)}
                 className="bg-secondary/50"
                 disabled={isCreating}
+                autoFocus
               />
             </div>
             <Button type="submit" className="w-full" disabled={isCreating}>

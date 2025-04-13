@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -214,7 +215,7 @@ const SongSearch: React.FC = () => {
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
+              className="h-8 w-8 hover:text-destructive"
               onClick={handleClosePlayer}
               title="Close player"
             >
@@ -234,7 +235,7 @@ const SongSearch: React.FC = () => {
         <Button
           variant="ghost"
           size="icon"
-          className="absolute top-2 right-2 h-8 w-8"
+          className="absolute top-2 right-2 h-8 w-8 hover:text-destructive"
           onClick={handleClosePlayer}
           title="Close player"
         >

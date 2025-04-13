@@ -8,6 +8,7 @@ import Playlist from './Playlist';
 import ChatBox from './ChatBox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const SessionView: React.FC = () => {
   const { currentSession, leaveSession, getSessionShareLink } = useSession();
@@ -56,7 +57,17 @@ const SessionView: React.FC = () => {
       <MusicPlayer />
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Playlist />
+        <div className="glass-card rounded-lg overflow-hidden">
+          <Tabs defaultValue="queue">
+            <TabsList className="w-full">
+              <TabsTrigger value="queue" className="flex-1">Queue ({currentSession.playlist.length})</TabsTrigger>
+              <TabsTrigger value="add" className="flex-1">Add Songs</TabsTrigger>
+            </TabsList>
+            <div className="p-4">
+              <Playlist />
+            </div>
+          </Tabs>
+        </div>
         <ChatBox />
       </div>
       

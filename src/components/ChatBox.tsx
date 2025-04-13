@@ -52,7 +52,7 @@ const ChatMessage: React.FC<{ message: Message; currentUserId: string }> = ({ me
 };
 
 const ChatBox: React.FC = () => {
-  const { messages, sendMessage } = useSession();
+  const { messages, sendMessage, currentSession } = useSession();
   const { user } = useAuth();
   const [newMessage, setNewMessage] = useState('');
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -74,7 +74,7 @@ const ChatBox: React.FC = () => {
     setNewMessage('');
   };
   
-  if (!user) return null;
+  if (!user || !currentSession) return null;
   
   return (
     <div className="glass-card rounded-lg overflow-hidden flex flex-col h-[350px]">
@@ -87,7 +87,7 @@ const ChatBox: React.FC = () => {
           {messages.length === 0 ? (
             <div className="h-full flex items-center justify-center text-center p-4">
               <p className="text-muted-foreground">
-                No messages yet. Start the conversation!
+                Welcome to "{currentSession.name}" session! Start the conversation!
               </p>
             </div>
           ) : (

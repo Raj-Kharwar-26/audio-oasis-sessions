@@ -19,6 +19,7 @@ const SessionRoute: React.FC = () => {
     // If already in a session, don't try to join another
     if (currentSession) {
       setIsLoading(false);
+      navigate('/');
       return;
     }
     
@@ -39,6 +40,9 @@ const SessionRoute: React.FC = () => {
         .then(success => {
           if (!success) {
             setError('Session not found or has ended');
+          } else {
+            // Successfully joined, redirect to home
+            navigate('/');
           }
         })
         .catch(err => {
@@ -52,14 +56,7 @@ const SessionRoute: React.FC = () => {
       setError('Invalid session ID');
       setIsLoading(false);
     }
-  }, [roomId, joinSession, authLoading, isAuthenticated, currentSession]);
-  
-  // Redirect to home if already in the session
-  useEffect(() => {
-    if (currentSession) {
-      navigate('/');
-    }
-  }, [currentSession, navigate]);
+  }, [roomId, joinSession, authLoading, isAuthenticated, currentSession, navigate]);
   
   if (authLoading || isLoading) {
     return (
