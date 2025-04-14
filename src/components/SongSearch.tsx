@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -358,11 +357,10 @@ const SongSearch: React.FC = () => {
                 <div className="flex items-center gap-2 shrink-0">
                   <span className="text-xs text-muted-foreground">{formatTime(song.duration)}</span>
                   
-                  {/* Make play button more visible and touchable on mobile */}
                   <Button
-                    variant="ghost"
-                    size={isMobile ? "sm" : "icon"}
-                    className={isMobile ? "h-10 w-10 bg-secondary/50" : "h-8 w-8"}
+                    variant={isMobile ? "secondary" : "ghost"}
+                    size="icon"
+                    className={isMobile ? "h-10 w-10 bg-secondary/80" : "h-8 w-8"}
                     onClick={() => handlePlayPause(song)}
                     disabled={!song.youtubeId}
                     title={song.youtubeId ? "Play preview" : "No preview available"}
