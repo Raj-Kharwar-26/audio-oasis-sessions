@@ -1,13 +1,14 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useSession } from '@/context/SessionContext';
 import { useAuth } from '@/context/AuthContext';
 import { Song } from '@/types';
 import { Button } from '@/components/ui/button';
 import { formatTime } from '@/lib/utils';
-import { Heart, Music, Trash2, Play, Volume2 } from 'lucide-react';
+import { Heart, Music, Trash2, Play, Volume2, ArrowUp, ArrowDown } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import AddSongForm from './AddSongForm';
+import { useMobile } from '@/hooks/use-mobile';
 
 const SongItem: React.FC<{ 
   song: Song; 
@@ -16,13 +17,36 @@ const SongItem: React.FC<{
   onPlay: () => void;
   onVote: () => void;
   onRemove: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
   currentUserId: string;
-}> = ({ song, isPlaying, isHost, onPlay, onVote, onRemove, currentUserId }) => {
+  index: number;
+  totalSongs: number;
+}> = ({ 
+  song, 
+  isPlaying, 
+  isHost, 
+  onPlay, 
+  onVote, 
+  onRemove, 
+  onMoveUp,
+  onMoveDown,
+  currentUserId,
+  index,
+  totalSongs
+}) => {
   const hasVoted = song.votes.includes(currentUserId);
   const canRemove = isHost || song.addedBy === currentUserId;
+  const canReorder = isHost;
+  const isMobile = useMobile();
   
   return (
-    <div className={`flex items-center p-3 rounded-md gap-3 ${isPlaying ? 'bg-secondary/40' : 'hover:bg-secondary/20'}`}>
+    <div className={`flex items-center p-3 rounded-md gap-2 ${isPlaying ? 'bg-secondary/40' : 'hover:bg-secondary/20'}`}>
+      {/* Position indicator */}
+      <div className="flex-shrink-0 w-6 text-center text-sm text-muted-foreground">
+        {index + 1}
+      </div>
+      
       {/* Cover image or placeholder */}
       <div className="h-10 w-10 shrink-0 rounded overflow-hidden">
         {song.cover ? (
@@ -53,17 +77,17 @@ const SongItem: React.FC<{
       </div>
       
       {/* Duration + Controls */}
-      <div className="flex items-center gap-2 shrink-0">
+      <div className="flex items-center gap-1 shrink-0">
         <span className="text-xs text-muted-foreground">{formatTime(song.duration)}</span>
         
         <Button
           variant="ghost"
           size="icon"
-          className={`h-8 w-8 ${hasVoted ? 'text-primary' : 'text-muted-foreground'}`}
+          className={`${isMobile ? "h-10 w-10" : "h-8 w-8"} ${hasVoted ? 'text-primary' : 'text-muted-foreground'}`}
           onClick={onVote}
           title={hasVoted ? 'Remove vote' : 'Vote for this song'}
         >
-          <Heart size={16} className={hasVoted ? 'fill-primary' : ''} />
+          <Heart size={isMobile ? 18 : 16} className={hasVoted ? 'fill-primary' : ''} />
           {song.votes.length > 0 && (
             <span className="absolute -top-1 -right-1 text-[10px] bg-primary text-primary-foreground rounded-full w-4 h-4 flex items-center justify-center">
               {song.votes.length}
@@ -72,7 +96,7 @@ const SongItem: React.FC<{
         </Button>
         
         {isPlaying ? (
-          <div className="h-8 w-8 flex items-center justify-center">
+          <div className={`${isMobile ? "h-10 w-10" : "h-8 w-8"} flex items-center justify-center`}>
             <div className="audio-visualizer h-4">
               <span className="animate-wave-1 h-full"></span>
               <span className="animate-wave-2 h-3/4"></span>
@@ -84,24 +108,50 @@ const SongItem: React.FC<{
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
+              className={isMobile ? "h-10 w-10" : "h-8 w-8"}
               onClick={onPlay}
               title="Play this song"
             >
-              <Play size={16} />
+              <Play size={isMobile ? 18 : 16} />
             </Button>
           )
+        )}
+        
+        {canReorder && (
+          <>
+            <Button
+              variant="ghost"
+              size="icon"
+              className={`${isMobile ? "h-10 w-10" : "h-8 w-8"} text-muted-foreground`}
+              onClick={onMoveUp}
+              disabled={index === 0}
+              title="Move up in playlist"
+            >
+              <ArrowUp size={isMobile ? 18 : 16} />
+            </Button>
+            
+            <Button
+              variant="ghost"
+              size="icon"
+              className={`${isMobile ? "h-10 w-10" : "h-8 w-8"} text-muted-foreground`}
+              onClick={onMoveDown}
+              disabled={index === totalSongs - 1}
+              title="Move down in playlist"
+            >
+              <ArrowDown size={isMobile ? 18 : 16} />
+            </Button>
+          </>
         )}
         
         {canRemove && (
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+            className={`${isMobile ? "h-10 w-10" : "h-8 w-8"} text-muted-foreground hover:text-destructive`}
             onClick={onRemove}
             title="Remove from playlist"
           >
-            <Trash2 size={16} />
+            <Trash2 size={isMobile ? 18 : 16} />
           </Button>
         )}
       </div>
@@ -110,7 +160,7 @@ const SongItem: React.FC<{
 };
 
 const Playlist: React.FC = () => {
-  const { currentSession, voteSong, removeSong, seekTo } = useSession();
+  const { currentSession, voteSong, removeSong, reorderSong } = useSession();
   const { user } = useAuth();
   
   if (!currentSession || !user) return null;
@@ -121,8 +171,21 @@ const Playlist: React.FC = () => {
   const playSong = (index: number) => {
     if (!isHost || !currentSession) return;
     
-    // Simple simulation - in a real app, this would update the current song in the session
-    seekTo(0); // Reset progress
+    // This would be implemented in the session context
+    reorderSong(index, currentSession.currentSongIndex);
+  };
+  
+  // Function to move a song up or down in the playlist
+  const moveSong = (fromIndex: number, direction: 'up' | 'down') => {
+    if (!isHost) return;
+    
+    const toIndex = direction === 'up' ? fromIndex - 1 : fromIndex + 1;
+    
+    if (toIndex < 0 || toIndex >= currentSession.playlist.length) {
+      return; // Don't move if it would go out of bounds
+    }
+    
+    reorderSong(fromIndex, toIndex);
   };
   
   return (
@@ -148,7 +211,11 @@ const Playlist: React.FC = () => {
                 onPlay={() => playSong(index)}
                 onVote={() => voteSong(song.id)}
                 onRemove={() => removeSong(song.id)}
+                onMoveUp={() => moveSong(index, 'up')}
+                onMoveDown={() => moveSong(index, 'down')}
                 currentUserId={user.id}
+                index={index}
+                totalSongs={currentSession.playlist.length}
               />
             ))}
           </div>

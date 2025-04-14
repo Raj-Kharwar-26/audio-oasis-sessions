@@ -4,16 +4,18 @@ import { useSession } from '@/context/SessionContext';
 import { useAuth } from '@/context/AuthContext';
 import { 
   Play, Pause, SkipBack, SkipForward, 
-  Music, Volume2, Users
+  Music, Volume2, Users, Headphones
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { PlayerState } from '@/types';
 import { formatTime } from '@/lib/utils';
+import { useMobile } from '@/hooks/use-mobile';
 
 const MusicPlayer: React.FC = () => {
   const { currentSession, playerState, playPause, nextSong, previousSong, seekTo, youtubePlayer } = useSession();
   const { user } = useAuth();
+  const isMobile = useMobile();
   
   if (!currentSession || !currentSession.playlist.length) {
     return (
@@ -81,12 +83,16 @@ const MusicPlayer: React.FC = () => {
               </p>
             </div>
             
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground flex items-center gap-1">
+            <div className="flex flex-wrap items-center gap-2 justify-center md:justify-end">
+              <span className="text-xs bg-secondary px-2 py-1 rounded-full flex items-center gap-1">
+                <Headphones size={12} />
+                {playerState === PlayerState.PLAYING ? 'Playing' : 'Paused'}
+              </span>
+              <span className="text-xs bg-secondary px-2 py-1 rounded-full flex items-center gap-1">
                 <Users size={12} />
                 {currentSession.users.length}
               </span>
-              <span className="text-xs text-muted-foreground flex items-center gap-1">
+              <span className="text-xs bg-secondary px-2 py-1 rounded-full flex items-center gap-1">
                 <Volume2 size={12} />
                 Host: {currentSession.users.find(u => u.id === currentSession.hostId)?.name}
               </span>
@@ -118,20 +124,21 @@ const MusicPlayer: React.FC = () => {
               size="icon"
               disabled={!isHost}
               onClick={previousSong}
+              className={isMobile ? "h-10 w-10" : ""}
             >
-              <SkipBack size={20} />
+              <SkipBack size={isMobile ? 20 : 16} />
             </Button>
             
             <Button 
               size="icon"
               disabled={!isHost}
               onClick={playPause}
-              className={isHost ? 'hover:bg-primary' : 'opacity-75'}
+              className={isHost ? `hover:bg-primary ${isMobile ? "h-12 w-12" : ""}` : "opacity-75"}
             >
               {playerState === PlayerState.PLAYING ? (
-                <Pause size={20} />
+                <Pause size={isMobile ? 24 : 20} />
               ) : (
-                <Play size={20} />
+                <Play size={isMobile ? 24 : 20} />
               )}
             </Button>
             
@@ -140,8 +147,9 @@ const MusicPlayer: React.FC = () => {
               size="icon"
               disabled={!isHost}
               onClick={nextSong}
+              className={isMobile ? "h-10 w-10" : ""}
             >
-              <SkipForward size={20} />
+              <SkipForward size={isMobile ? 20 : 16} />
             </Button>
           </div>
         </div>
