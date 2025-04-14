@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Play, Pause, Plus, AlertCircle, SkipForward, SkipBack, Repeat, X, Music, UserPlus } from 'lucide-react';
+import { Search, Play, Pause, Plus, AlertCircle, SkipForward, SkipBack, Repeat, X, Music } from 'lucide-react';
 import { Song } from '@/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { formatTime } from '@/lib/utils';
@@ -11,7 +11,6 @@ import { searchYouTubeSongs } from '@/services/youtube';
 import { YouTubePlayer } from '@/lib/YouTubePlayer';
 import { Progress } from '@/components/ui/progress';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { useSession } from '@/context/SessionContext';
 
 const SongSearch: React.FC = () => {
   const [query, setQuery] = useState('');
@@ -22,7 +21,6 @@ const SongSearch: React.FC = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const isMobile = useIsMobile();
-  const { currentSession, addSong } = useSession();
   
   useEffect(() => {
     const player = new YouTubePlayer('preview-player');
@@ -109,15 +107,6 @@ const SongSearch: React.FC = () => {
         toast.error("Failed to play song. Please try again.");
       }
     }
-  };
-  
-  const handleAddToRoom = (song: Song) => {
-    if (!currentSession) {
-      toast.error("You need to create or join a room first");
-      return;
-    }
-    
-    addSong(song);
   };
   
   const handleSeekForward = async () => {
@@ -321,18 +310,6 @@ const SongSearch: React.FC = () => {
               <SkipForward size={18} />
             </Button>
           </div>
-          
-          {currentSession && (
-            <Button 
-              className="w-full mt-4 gap-2"
-              onClick={() => handleAddToRoom(currentPlayingSong)}
-              variant="outline"
-            >
-              <Plus size={16} />
-              <Music size={16} />
-              Add to Room
-            </Button>
-          )}
         </div>
       </div>
     );
@@ -381,38 +358,27 @@ const SongSearch: React.FC = () => {
                 <div className="flex items-center gap-2 shrink-0">
                   <span className="text-xs text-muted-foreground">{formatTime(song.duration)}</span>
                   
+                  {/* Make play button more visible and touchable on mobile */}
                   <Button
                     variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
+                    size={isMobile ? "sm" : "icon"}
+                    className={isMobile ? "h-10 w-10 bg-secondary/50" : "h-8 w-8"}
                     onClick={() => handlePlayPause(song)}
                     disabled={!song.youtubeId}
                     title={song.youtubeId ? "Play preview" : "No preview available"}
                   >
                     {currentPlayingSong && currentPlayingSong.id === song.id && isPlaying ? (
-                      <Pause size={16} />
+                      <Pause size={isMobile ? 20 : 16} />
                     ) : (
                       <>
                         {song.youtubeId ? (
-                          <Play size={16} />
+                          <Play size={isMobile ? 20 : 16} />
                         ) : (
-                          <AlertCircle size={16} className="text-muted-foreground" />
+                          <AlertCircle size={isMobile ? 20 : 16} className="text-muted-foreground" />
                         )}
                       </>
                     )}
                   </Button>
-                  
-                  {currentSession && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => handleAddToRoom(song)}
-                      title="Add to room"
-                    >
-                      <Plus size={16} />
-                    </Button>
-                  )}
                 </div>
               </div>
             ))}
@@ -448,8 +414,8 @@ const SongSearch: React.FC = () => {
     <>
       {hiddenPlayer}
       {currentPlayingSong ? (
-        <div className="grid grid-cols-3 gap-6">
-          <div className="col-span-2">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="col-span-1 md:col-span-2">
             {renderSearchResults()}
           </div>
           <div className="col-span-1">
