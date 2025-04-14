@@ -256,13 +256,15 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         .insert({
           name: name.trim(),
           creator_id: user.id,
-          room_id: null,
           status: 'active',
         })
         .select()
         .single();
       
-      if (error) throw error;
+      if (error) {
+        console.error('Database error creating session:', error);
+        throw error;
+      }
       
       const { error: userError } = await supabase
         .from('session_users')
@@ -272,7 +274,10 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
           user_name: user.name
         });
       
-      if (userError) throw userError;
+      if (userError) {
+        console.error('Error adding user to session:', userError);
+        throw userError;
+      }
       
       const welcomeMsg: Message = {
         id: `msg_${Date.now()}`,
