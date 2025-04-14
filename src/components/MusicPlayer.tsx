@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import { useSession } from '@/context/SessionContext';
 import { useAuth } from '@/context/AuthContext';
@@ -10,12 +9,12 @@ import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { PlayerState } from '@/types';
 import { formatTime } from '@/lib/utils';
-import { useMobile } from '@/hooks/use-mobile';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 const MusicPlayer: React.FC = () => {
   const { currentSession, playerState, playPause, nextSong, previousSong, seekTo, youtubePlayer } = useSession();
   const { user } = useAuth();
-  const isMobile = useMobile();
+  const isMobile = useIsMobile();
   
   if (!currentSession || !currentSession.playlist.length) {
     return (

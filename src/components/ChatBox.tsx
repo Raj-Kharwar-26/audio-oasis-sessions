@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { useSession } from '@/context/SessionContext';
 import { useAuth } from '@/context/AuthContext';
@@ -7,16 +6,15 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Send, Music, ArrowUp, ArrowDown } from 'lucide-react';
-import { Message } from '@/types';
+import { Message, SongSuggestion } from '@/types';
 import { getInitials, stringToGradient } from '@/lib/utils';
-import { useMobile } from '@/hooks/use-mobile';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 const ChatMessage: React.FC<{ message: Message; currentUserId: string }> = ({ message, currentUserId }) => {
   const isCurrentUser = message.userId === currentUserId;
   const isSystem = message.userId === 'system';
-  const isMobile = useMobile();
+  const isMobile = useIsMobile();
   
-  // Format timestamp
   const date = new Date(message.timestamp);
   const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   
@@ -59,9 +57,8 @@ const ChatBox: React.FC = () => {
   const [newMessage, setNewMessage] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const isMobile = useMobile();
+  const isMobile = useIsMobile();
   
-  // Auto-scroll to bottom on new messages
   useEffect(() => {
     if (scrollAreaRef.current) {
       const scrollArea = scrollAreaRef.current;
@@ -74,11 +71,9 @@ const ChatBox: React.FC = () => {
     
     if (!newMessage.trim() || !user) return;
     
-    // Check for commands
     if (newMessage.startsWith('/')) {
       handleChatCommand(newMessage);
     } else {
-      // Regular message
       sendMessage(newMessage);
     }
     
@@ -97,12 +92,8 @@ const ChatBox: React.FC = () => {
         sendMessage('/down - Show less chat history');
         break;
       case 'song':
-        // Implementation would search for a song based on the remaining text
-        // and add it to the playlist
         const songQuery = commandParts.slice(1).join(' ');
         if (songQuery) {
-          // This is just a placeholder - in a real app, this would
-          // search for songs and let the user pick one to add
           const mockSong: SongSuggestion = {
             title: songQuery,
             artist: 'Artist from chat search',

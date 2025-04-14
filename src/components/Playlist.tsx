@@ -1,14 +1,13 @@
-
 import React, { useState } from 'react';
 import { useSession } from '@/context/SessionContext';
 import { useAuth } from '@/context/AuthContext';
-import { Song } from '@/types';
+import { Song, SongSuggestion } from '@/types';
 import { Button } from '@/components/ui/button';
 import { formatTime } from '@/lib/utils';
 import { Heart, Music, Trash2, Play, Volume2, ArrowUp, ArrowDown } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import AddSongForm from './AddSongForm';
-import { useMobile } from '@/hooks/use-mobile';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 const SongItem: React.FC<{ 
   song: Song; 
@@ -38,7 +37,7 @@ const SongItem: React.FC<{
   const hasVoted = song.votes.includes(currentUserId);
   const canRemove = isHost || song.addedBy === currentUserId;
   const canReorder = isHost;
-  const isMobile = useMobile();
+  const isMobile = useIsMobile();
   
   return (
     <div className={`flex items-center p-3 rounded-md gap-2 ${isPlaying ? 'bg-secondary/40' : 'hover:bg-secondary/20'}`}>
